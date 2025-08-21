@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLM Router Pro</title>
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <!-- Load Inter font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
     <!-- Load Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -15,7 +14,50 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        'sans': ['Inter', 'sans-serif']
+                        'sans': ['Inter', 'sans-serif'],
+                        'serif': ['Playfair Display', 'serif']
+                    },
+                    // Add custom colors
+                    colors: {
+                        // Primary brand color (used for highlights like the heart)
+                        'brand-red': {
+                            50: '#fff1f2',
+                            100: '#ffe4e6',
+                            200: '#fecdd3',
+                            300: '#fda4af',
+                            400: '#fb7185',
+                            500: '#f43f5e', // Main brand red (like the heart)
+                            600: '#e11d48',
+                            700: '#be123c',
+                            800: '#9f1239',
+                            900: '#881337',
+                        },
+                        // Secondary accent color (e.g., for comparison mode)
+                        'brand-purple': {
+                            50: '#faf5ff',
+                            100: '#f3e8ff',
+                            200: '#e9d5ff',
+                            300: '#d8b4fe',
+                            400: '#c084fc',
+                            500: '#a855f7',
+                            600: '#9333ea',
+                            700: '#7e22ce',
+                            800: '#6b21a8',
+                            900: '#581c87',
+                        },
+                        // Tertiary color (e.g., for benchmarks)
+                        'brand-blue': {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
                     }
                 }
             }
@@ -41,6 +83,15 @@
             90% { transform: rotate(10deg); }
             100% { transform: rotate(0); }
         }
+
+        /* Ensure the patch notes panel is positioned relative to the viewport and has a high z-index */
+        #patch-notes-panel {
+            position: fixed !important; /* Changed from absolute to fixed */
+            top: auto !important;       /* Let the top be determined by Tailwind's mt-2 and right-0 */
+            /* The z-index needs to be higher than any z-index used in the main content area */
+            /* Tailwind's max z-index utility is z-50 (value 50). Let's use a higher value. */
+            z-index: 9999 !important;   /* Use a very high, explicit z-index */
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 font-sans min-h-screen flex flex-col transition-colors duration-300">
@@ -48,16 +99,15 @@
     <div id="app" class="flex-grow flex items-center justify-center p-4">
         <!-- Login Screen -->
         <div id="login-screen" class="text-center max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-8 transition-colors duration-300">
-            <div class="mb-6">
-                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
+            <div class="mb-8">
+                <div class="flex items-center justify-center space-x-3 mb-4">
+                    <img src="favicon.ico" alt="LLM Router Pro Logo" class="w-14 h-14">
+                    <!-- Use serif font and adjusted weight for main title -->
+                    <h1 class="text-4xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 bg-clip-text text-transparent font-serif">LLM Router Pro</h1>
                 </div>
-                <h1 class="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 bg-clip-text text-transparent">LLM Router Pro</h1>
                 <p class="mt-2 text-gray-600 dark:text-gray-300">Sign in to access your favorite AI models.</p>
             </div>
-            <div id="google-signin-container" class="mb-4">
+            <div id="google-signin-container" class="mb-6"> <!-- Increased margin bottom -->
                 <div id="g_id_onload"
                     data-client_id="19346395296-nuvs8c5ceqq7c2inal89rff8q87o0gfg.apps.googleusercontent.com"
                     data-callback="handleCredentialResponse"
@@ -76,7 +126,7 @@
             <button id="demo-login" class="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition duration-200 ease-in-out">
                 Continue as Demo User
             </button>
-            <div id="login-error" class="mt-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl text-red-600 dark:text-red-400 text-sm hidden">
+            <div id="login-error" class="mt-6 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl text-red-600 dark:text-red-400 text-sm hidden"> <!-- Increased margin top -->
                 <div class="flex items-center">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -86,17 +136,36 @@
             </div>
         </div>
         <!-- Router Screen -->
-        <div id="router-screen" class="hidden max-w-7xl w-full">
+        <div id="router-screen" class="hidden w-full max-w-7xl"> <!-- Removed mb-8 from here, added spacing inside -->
+            <!-- Patch Notes Panel -->
+            <div id="patch-notes-panel" class="fixed z-50 hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 w-80">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Model Updates</h3>
+                    <button id="close-patch-notes" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="patch-notes-content" class="max-h-96 overflow-y-auto p-2">
+                    <!-- Patch notes will be populated by JavaScript -->
+                    <div class="text-center text-gray-500 dark:text-gray-400 p-4">No recent updates.</div>
+                </div>
+            </div>
+            
             <!-- Header -->
-            <header class="flex justify-between items-center mb-8 p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/20 transition-colors duration-300">
-                <div class="flex items-center space-x-3">
-                    <img id="user-image" src="" alt="User Avatar" class="w-12 h-12 rounded-full border-3 border-white shadow-lg" onerror="this.src='image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23d1d5db%22><path d=%22M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z%22/></svg>'">
+            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 p-5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/20 transition-colors duration-300">
+                 <!-- Logo and Title Section -->
+                 <div class="flex items-center space-x-3">
+                    <img src="favicon.ico" alt="LLM Router Pro Logo" class="w-14 h-14">
                     <div>
-                        <div id="user-name" class="font-semibold text-gray-800 dark:text-gray-200"></div>
+                        <!-- Use font-semibold or font-bold for user name -->
+                        <div id="user-name" class="font-bold text-gray-800 dark:text-gray-200 text-lg"></div>
                         <div class="text-sm text-gray-500 dark:text-gray-400">Choose your AI assistant</div>
                     </div>
                 </div>
-                <div class="flex items-center space-x-3">
+                <!-- Action Buttons Section -->
+                <div class="flex flex-wrap items-center gap-2"> <!-- Reduced gap -->
                     <!-- Patch Notes Bell Icon -->
                     <div class="relative">
                         <button id="patch-notes-toggle" class="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-xl transition duration-200 relative">
@@ -106,6 +175,7 @@
                             <!-- Notification Badge -->
                             <span id="notification-badge" class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full hidden"></span>
                         </button>
+                        
                     </div>
                     <!-- Dark Mode Toggle -->
                     <button id="theme-toggle" class="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-xl transition duration-200">
@@ -118,8 +188,9 @@
                     </button>
                     <!-- Dashboard Toggle -->
                     <button id="dashboard-toggle" class="px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-700 dark:text-blue-300 font-medium rounded-xl transition duration-200 flex items-center space-x-2">
+                        <!-- SVG icon MOVED INSIDE the button -->
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2a2 2 0 002-2z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         <span id="dashboard-text">Dashboard</span>
                     </button>
@@ -135,22 +206,23 @@
             <!-- Model Selection Screen -->
             <div id="model-selection" class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/20 overflow-hidden transition-colors duration-300">
                 <div class="p-1 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500"></div>
-                <div class="p-8">
+                <div class="p-6 sm:p-8"> <!-- Adjusted padding -->
                     <div class="text-center mb-8">
-                        <h2 class="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 bg-clip-text text-transparent mb-2">Choose Your AI Model</h2>
+                        <!-- Use serif font for section title -->
+                        <h2 class="text-3xl font-bold bg-gradient-to-r from-gray-800 via-brand-red-500 to-gray-600 dark:from-gray-200 dark:via-brand-red-400 dark:to-gray-400 bg-clip-text text-transparent font-serif mb-3">Choose Your AI Model</h2>
                         <p class="text-gray-600 dark:text-gray-300">Click an icon to open the model or add to dashboard.</p>
                     </div>
                     <!-- Action Buttons -->
-                    <div class="flex flex-wrap justify-center gap-3 mb-6">
+                    <div class="flex flex-wrap justify-center gap-3 mb-8"> <!-- Increased margin bottom -->
                         <!-- Live Comparison Button -->
-                        <button id="live-comparison-btn" class="px-4 py-2 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 text-purple-700 dark:text-purple-300 font-medium rounded-xl transition duration-200 flex items-center space-x-2">
+                        <button id="live-comparison-btn" class="px-4 py-2 bg-brand-purple-100 hover:bg-brand-purple-200 dark:bg-brand-purple-900/30 dark:hover:bg-brand-purple-800/40 text-brand-purple-700 dark:text-brand-purple-300 font-medium rounded-xl transition duration-200 flex items-center space-x-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
                             <span>Live Comparison</span>
                         </button>
                         <!-- See Benchmarks Button -->
-                        <button id="benchmarks-btn" class="px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-700 dark:text-blue-300 font-medium rounded-xl transition duration-200 flex items-center space-x-2">
+                        <button id="benchmarks-btn" class="px-4 py-2 bg-brand-blue-100 hover:bg-brand-blue-200 dark:bg-brand-blue-900/30 dark:hover:bg-brand-blue-800/40 text-brand-blue-700 dark:text-brand-blue-300 font-medium rounded-xl transition duration-200 flex items-center space-x-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
@@ -164,7 +236,7 @@
                 </div>
             </div>
             <!-- Unified Dashboard -->
-            <div id="unified-dashboard" class="hidden bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-300">
+            <div id="unified-dashboard" class="hidden mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-300"> <!-- Added margin top -->
                 <div class="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                     <div id="dashboard-tabs" class="flex flex-1 overflow-x-auto"></div>
                     <button id="add-model-tab" class="p-3 hover:bg-gray-200 dark:hover:bg-gray-700 transition duration-200">
@@ -176,21 +248,6 @@
                 <div id="dashboard-content" class="h-96 overflow-hidden"></div>
             </div>
         </div>
-        <!-- Patch Notes Panel MOVED OUTSIDE OF HEADER with solid background -->
-        <div id="patch-notes-panel" class="fixed z-50 hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 w-80">
-            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Model Updates</h3>
-                <button id="close-patch-notes" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div id="patch-notes-content" class="max-h-96 overflow-y-auto p-2">
-                <!-- Patch notes will be populated by JavaScript -->
-                <div class="text-center text-gray-500 dark:text-gray-400 p-4">No recent updates.</div>
-            </div>
-        </div>
     </div>
     <!-- Tooltip (Reverted to original behavior) -->
     <div id="tooltip" class="fixed z-50 hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 max-w-sm transition-colors duration-300">
@@ -198,7 +255,7 @@
     </div>
     <!-- Footer -->
     <footer class="py-6 text-center text-gray-500 dark:text-gray-400 text-sm transition-colors duration-300">
-        <p>&copy; 2024 LLM Router Pro. Built with ❤️ for AI enthusiasts.</p>
+        <p>&copy; 2025 LLM Router Pro. Built with <span class="text-brand-red-500">❤️</span> for AI enthusiasts.</p>
         <p> Powered by AL.ai </p>
     </footer>
     <script>
@@ -342,23 +399,27 @@
         let dashboardTabs = [];
         let isPatchNotesPanelOpen = false;
         let lastSeenPatchNoteId = parseInt(localStorage.getItem('lastSeenPatchNoteId')) || 0;
+
         // Initialize dark mode
         function initializeDarkMode() {
             if (isDarkMode) {
                 document.documentElement.classList.add('dark');
             }
         }
+
         // Toggle dark mode
         function toggleDarkMode() {
             isDarkMode = !isDarkMode;
             localStorage.setItem('darkMode', isDarkMode.toString());
             document.documentElement.classList.toggle('dark', isDarkMode);
         }
+
         // Check for new patch notes and update UI
         function checkForNewPatchNotes() {
             const latestNoteId = patchNotes.length > 0 ? Math.max(...patchNotes.map(note => note.id)) : 0;
             const badge = document.getElementById('notification-badge');
             const bellIcon = document.getElementById('bell-icon');
+
             if (latestNoteId > lastSeenPatchNoteId) {
                 badge.classList.remove('hidden');
                 // Add animation class to the bell icon
@@ -371,6 +432,7 @@
                 badge.classList.add('hidden');
             }
         }
+
         // Toggle patch notes panel
         function togglePatchNotesPanel() {
             const panel = document.getElementById('patch-notes-panel');
@@ -378,18 +440,19 @@
             
             isPatchNotesPanelOpen = !isPatchNotesPanelOpen;
             if (isPatchNotesPanelOpen) {
-                // Calculate position relative to the toggle button
+                // Position panel relative to the toggle button
                 const buttonRect = toggleButton.getBoundingClientRect();
+                panel.style.position = 'fixed';
+                panel.style.left = `${buttonRect.right - panel.offsetWidth + 20}px`;
+                panel.style.top = `${buttonRect.bottom + window.scrollY}px`;
                 
-                // Position the panel to the right of the button, aligned with the top
-                panel.style.left = `${buttonRect.right}px`;
-                panel.style.top = `${buttonRect.bottom}px`;
-                
-                // Check if the panel would go off screen to the right
+                // Check if panel goes off screen and adjust if needed
                 const panelRect = panel.getBoundingClientRect();
                 if (panelRect.right > window.innerWidth) {
-                    // If it would go off screen, position it to the left of the button instead
-                    panel.style.left = `${buttonRect.left - panelRect.width}px`;
+                    panel.style.left = `${buttonRect.left - panelRect.width + 20}px`;
+                }
+                if (panelRect.bottom > window.innerHeight) {
+                    panel.style.top = `${buttonRect.top - panelRect.height + window.scrollY}px`;
                 }
                 
                 panel.classList.remove('hidden');
@@ -408,11 +471,13 @@
                 panel.classList.add('hidden');
             }
         }
+
         // Close patch notes panel
         function closePatchNotesPanel() {
             isPatchNotesPanelOpen = false;
             document.getElementById('patch-notes-panel').classList.add('hidden');
         }
+
         // Render patch notes
         function renderPatchNotes() {
             const contentContainer = document.getElementById('patch-notes-content');
@@ -420,13 +485,16 @@
                 contentContainer.innerHTML = '<div class="text-center text-gray-500 dark:text-gray-400 p-4">No recent updates.</div>';
                 return;
             }
+
             // Sort notes by date (newest first)
             const sortedNotes = [...patchNotes].sort((a, b) => new Date(b.date) - new Date(a.date));
+
             contentContainer.innerHTML = sortedNotes.map(note => {
                 const model = models.find(m => m.id === note.modelId);
                 const modelName = model ? model.name : 'Unknown Model';
                 const modelColor = model ? model.color : 'gray';
                 const formattedDate = new Date(note.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
                 return `
                     <a href="${note.link}" target="_blank" rel="noopener noreferrer" class="block p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200">
                         <div class="flex items-start">
@@ -448,31 +516,34 @@
                 `;
             }).join('');
         }
+
         // Create model card (Updated to use info_url for Learn More)
         function createModelCard(model) {
-            return `
-                <div class="model-card-container flex flex-col">
-                    <div class="model-card group relative flex flex-col items-center justify-center p-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700 dark:to-gray-800 hover:from-${model.color}-50 hover:to-white dark:hover:from-${model.color}-900/30 dark:hover:to-gray-800 rounded-2xl border border-gray-200 dark:border-gray-600 hover:border-${model.color}-300 dark:hover:border-${model.color}-600 transition-all duration-300 ease-in-out transform hover:-translate-y-2 hover:shadow-xl cursor-pointer"
-                         data-model-id="${model.id}"
-                         onmouseenter="showTooltip(event, '${model.id}')"
-                         onmouseleave="hideTooltip()">
-                        <div class="bg-gradient-to-br from-${model.color}-400 to-${model.color}-600 rounded-2xl w-16 h-16 mb-4 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                            <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="${model.icon}"/>
-                            </svg>
-                        </div>
-                        <span class="font-semibold text-gray-700 dark:text-gray-200 group-hover:text-${model.color}-700 dark:group-hover:text-${model.color}-300 transition-colors duration-300">${model.name}</span>
-                        <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">${model.company}</span>
-                    </div>
-                    <button onclick="openModel('${model.info_url}')" class="mt-2 px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition duration-200 self-center flex items-center">
-                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Learn More
-                    </button>
+    return `
+        <div class="model-card-container flex flex-col">
+            <div class="model-card group relative flex flex-col items-center justify-center p-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700 dark:to-gray-800 hover:from-${model.color}-50 hover:to-white dark:hover:from-${model.color}-900/30 dark:hover:to-gray-800 rounded-2xl border border-gray-200 dark:border-gray-600 hover:border-${model.color}-300 dark:hover:border-${model.color}-600 transition-all duration-300 ease-in-out transform hover:-translate-y-2 hover:shadow-xl cursor-pointer"
+                 data-model-id="${model.id}"
+                 onmouseenter="showTooltip(event, '${model.id}')"
+                 onmouseleave="hideTooltip()">
+                <div class="bg-gradient-to-br from-${model.color}-400 to-${model.color}-600 rounded-2xl w-16 h-16 mb-4 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="${model.icon}"/>
+                    </svg>
                 </div>
-            `;
-        }
+                <!-- Use font-bold for model name consistency -->
+                <span class="font-bold text-gray-700 dark:text-gray-200 group-hover:text-${model.color}-700 dark:group-hover:text-${model.color}-300 transition-colors duration-300 text-lg">${model.name}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">${model.company}</span>
+            </div>
+            <button onclick="openModel('${model.info_url}')" class="mt-3 px-3 py-1 text-xs bg-brand-red-100 hover:bg-brand-red-200 dark:bg-brand-red-900/30 dark:hover:bg-brand-red-800/40 text-brand-red-700 dark:text-brand-red-300 rounded-lg transition duration-200 self-center flex items-center">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+                Learn More
+            </button>
+        </div>
+    `;
+}
+
         // Show tooltip (Reverted to original content)
         function showTooltip(event, modelId) {
             const model = models.find(m => m.id === modelId);
@@ -507,6 +578,7 @@
             tooltip.classList.remove('hidden');
             positionTooltip(event, tooltip);
         }
+
         // Position tooltip
         function positionTooltip(event, tooltip) {
             const rect = event.target.getBoundingClientRect();
@@ -523,10 +595,12 @@
             tooltip.style.left = `${left}px`;
             tooltip.style.top = `${top}px`;
         }
+
         // Hide tooltip
         function hideTooltip() {
             document.getElementById('tooltip').classList.add('hidden');
         }
+
         // Render models grid
         function renderModelsGrid() {
             const grid = document.getElementById('models-grid');
@@ -534,6 +608,7 @@
             // Add click handlers for model cards (opening the model)
             grid.addEventListener('click', handleModelClick);
         }
+
         // Handle model click (Updated to prevent default and stop propagation)
         function handleModelClick(event) {
             // Find the closest model card element to ensure we're acting on the right target
@@ -563,6 +638,7 @@
             // In normal mode, open the model in a new tab
             openModel(model.url);
         }
+
         // Open model utility function (Updated for robustness)
         function openModel(url) {
             try {
@@ -589,6 +665,7 @@
             // we do nothing else that could cause navigation of the *current* page.
             // The function ends here, and the main LLM Router page should remain.
         }
+
         // Toggle dashboard
         function toggleDashboard() {
             const modelSelection = document.getElementById('model-selection');
@@ -607,6 +684,7 @@
                 toggleText.textContent = 'Dashboard';
             }
         }
+
         // Add dashboard tab
         function addDashboardTab(modelId) {
             const model = models.find(m => m.id === modelId);
@@ -621,6 +699,7 @@
             renderDashboardTabs();
             switchDashboardTab(modelId);
         }
+
         // Remove dashboard tab
         function removeDashboardTab(modelId) {
             const index = dashboardTabs.findIndex(tab => tab.id === modelId);
@@ -642,6 +721,7 @@
                 `;
             }
         }
+
         // Render dashboard tabs
         function renderDashboardTabs() {
             const tabsContainer = document.getElementById('dashboard-tabs');
@@ -659,6 +739,7 @@
                 </div>
             `).join('');
         }
+
         // Switch dashboard tab
         function switchDashboardTab(modelId) {
             dashboardTabs.forEach(tab => tab.active = tab.id === modelId);
@@ -669,6 +750,7 @@
                 <iframe src="${tab.url}" class="w-full h-full border-0" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
             `;
         }
+
         // Show add model modal
         function showAddModelModal() {
             const modal = document.createElement('div');
@@ -696,6 +778,7 @@
             document.body.appendChild(modal);
             window.currentModal = modal;
         }
+
         // Close modal
         function closeModal() {
             if (window.currentModal) {
@@ -703,6 +786,7 @@
                 window.currentModal = null;
             }
         }
+
         // Open model utility functions
         function parseJwt(token) {
             try {
@@ -720,6 +804,7 @@
                 return null;
             }
         }
+
         function handleCredentialResponse(response) {
             hideError();
             const responsePayload = parseJwt(response.credential);
@@ -736,6 +821,7 @@
                 showError("Failed to process login credentials.");
             }
         }
+
         function handleDemoLogin() {
             const demoUser = {
                 name: "Demo User",
@@ -746,6 +832,7 @@
             showRouterScreen(demoUser);
             checkForNewPatchNotes(); // Check after login
         }
+
         function storeUserData(userData) {
             try {
                 const dataToStore = {
@@ -757,18 +844,20 @@
                 console.error('Failed to store user ', error);
             }
         }
+
         function showRouterScreen(userData) {
             const userNameEl = document.getElementById('user-name');
-            const userImageEl = document.getElementById('user-image');
+            const userImageEl = document.getElementById('user-image'); // This element is now hidden/removed
             if (userNameEl) userNameEl.textContent = userData.name || 'User';
-            if (userImageEl && userData.picture) {
-                userImageEl.src = userData.picture;
-            }
+            // if (userImageEl && userData.picture) {
+            //     userImageEl.src = userData.picture;
+            // }
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('router-screen').classList.remove('hidden');
             renderModelsGrid();
             checkForNewPatchNotes(); // Initial check on screen show
         }
+
         function handleSignOut() {
             try {
                 localStorage.removeItem('user');
@@ -778,15 +867,18 @@
             document.getElementById('router-screen').classList.add('hidden');
             document.getElementById('login-screen').classList.remove('hidden');
         }
+
         function showError(message = "Login failed. Please try again.") {
             const errorEl = document.getElementById('login-error');
             const errorText = errorEl.querySelector('span');
             if (errorText) errorText.textContent = message;
             errorEl.classList.remove('hidden');
         }
+
         function hideError() {
             document.getElementById('login-error').classList.add('hidden');
         }
+
         // Initialize the app
         function initializeApp() {
             initializeDarkMode();
@@ -833,12 +925,14 @@
                 }
             });
         }
+
         // Initialize when DOM is ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initializeApp);
         } else {
             initializeApp();
         }
+
         // Global functions for callbacks
         window.handleCredentialResponse = handleCredentialResponse;
         window.showTooltip = showTooltip;
@@ -850,8 +944,4 @@
         window.closeModal = closeModal;
     </script>
 </body>
-
 </html>
-
-
-
