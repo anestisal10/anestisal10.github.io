@@ -2,6 +2,13 @@
 .bell-animate {
     animation: ring 0.5s ease-in-out;
 }
+
+@keyframes drift {
+    0%   { transform: translate( 0px,  0px) scale(1); }
+    50%  { transform: translate( 4px, -6px) scale(1.03); }
+    100% { transform: translate(-2px,  2px) scale(1); }
+  }
+
 @keyframes ring {
     0% { transform: rotate(0); }
     10% { transform: rotate(10deg); }
@@ -16,6 +23,70 @@
     100% { transform: rotate(0); }
 }
 
+/* Ensure grid items can center content */
+#models-grid {
+    display: grid;
+    place-items: center; /* Centers the flex-col wrapper */
+}
+
+/* Style the model card container */
+.model-card {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%; /* Takes full width of grid cell for centering */
+    height: auto;
+    /* Optional: Add min-height if needed for consistent spacing */
+    /* min-height: 150px; */
+}
+
+/* Ensure the main button div inside is the round bubble */
+.model-card > .relative { /* Targets the main button div */
+    border-radius: 50%; /* Makes it a circle */
+    width: 128px; /* Fixed width */
+    height: 128px; /* Fixed height (same as width) */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 1rem; /* Adjust padding inside the bubble */
+    box-sizing: border-box;
+    overflow: hidden; /* Ensures content respects rounded corners */
+    z-index: 2; /* Above the glow */
+    backdrop-filter: blur(2px); /* Optional: subtle blur */
+}
+
+/* Glow effect styling (already mostly handled by Tailwind classes in HTML) */
+.model-card > .absolute { /* Targets the glow div */
+    border-radius: 50%;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Behind the main button */
+    /* Animation and opacity are handled by Tailwind */
+}
+
+/* Adjust icon size if needed */
+.model-card svg {
+    width: 2rem; /* 32px */
+    height: 2rem; /* 32px */
+}
+
+/* Adjust text size if needed */
+.model-card .text-sm {
+    font-size: 0.875rem; /* Tailwind text-sm */
+    line-height: 1.25rem;
+    /* Allow text to wrap */
+    word-break: break-word;
+    max-width: 90%; /* Prevents text from overflowing the circle */
+}
+
+/* Optional: Adjust Learn More button if it feels too close */
+.model-card + button { /* Targets the Learn More button after the model card */
+    margin-top: 1rem; /* Increased margin */
+}
+
 /* Ensure the patch notes panel is positioned relative to the viewport and has a high z-index */
 #patch-notes-panel {
     position: fixed !important; /* Changed from absolute to fixed */
@@ -24,3 +95,5 @@
     /* Tailwind's max z-index utility is z-50 (value 50). Let's use a higher value. */
     z-index: 9999 !important;   /* Use a very high, explicit z-index */
 }
+
+
