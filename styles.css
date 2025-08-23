@@ -1,0 +1,26 @@
+/* Animation for the bell icon on new notifications */
+.bell-animate {
+    animation: ring 0.5s ease-in-out;
+}
+@keyframes ring {
+    0% { transform: rotate(0); }
+    10% { transform: rotate(10deg); }
+    20% { transform: rotate(-10deg); }
+    30% { transform: rotate(10deg); }
+    40% { transform: rotate(-10deg); }
+    50% { transform: rotate(10deg); }
+    60% { transform: rotate(-10deg); }
+    70% { transform: rotate(10deg); }
+    80% { transform: rotate(-10deg); }
+    90% { transform: rotate(10deg); }
+    100% { transform: rotate(0); }
+}
+
+/* Ensure the patch notes panel is positioned relative to the viewport and has a high z-index */
+#patch-notes-panel {
+    position: fixed !important; /* Changed from absolute to fixed */
+    top: auto !important;       /* Let the top be determined by Tailwind's mt-2 and right-0 */
+    /* The z-index needs to be higher than any z-index used in the main content area */
+    /* Tailwind's max z-index utility is z-50 (value 50). Let's use a higher value. */
+    z-index: 9999 !important;   /* Use a very high, explicit z-index */
+}
