@@ -98,7 +98,7 @@
                 </div>
             </div>
             <button id="demo-login" class="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition duration-200 ease-in-out">
-                Continue as a Demo User
+                Continue as Demo User
             </button>
             <div id="login-error" class="mt-6 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl text-red-600 dark:text-red-400 text-sm hidden"> <!-- Increased margin top -->
                 <div class="flex items-center">
@@ -204,8 +204,13 @@
                         </button>
                     </div>
                     <!-- LLM Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="models-grid">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-6 justify-items-stretch items-end" id="models-grid">
                         <!-- Models will be populated by JavaScript -->
+                    </div>
+
+                    <!-- Network Lines (SVG) -->
+                    <div id="network-lines" class="absolute inset-0 pointer-events-none z-10 opacity-20">
+                        <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg"></svg>
                     </div>
                 </div>
             </div>
@@ -230,12 +235,10 @@
     <!-- Footer -->
     <footer class="py-6 text-center text-gray-500 dark:text-gray-400 text-sm transition-colors duration-300">
         <p>&copy; 2025 LLM Router Pro. Built with <span class="text-brand-red-500">❤️</span> for AI enthusiasts.</p>
-        <p> Powered by AL.ai </p>
+        <p> Powered by AL.ai with LLMs </p>
     </footer>
     <!-- JavaScript Files -->
     <script src="model.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
-
-
