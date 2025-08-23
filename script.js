@@ -122,30 +122,216 @@ function renderPatchNotes() {
 }
 
 // Create model card (Updated to use info_url for Learn More)
-function createModelCard(model) {
+// --- Updated createModelCard with an extra glassmorphic bubble --- //
+// createModelCard.js — polished, glass-bubble buttons
+function createModelCard(model, index) {
+    /* ---------- 1. Color & gradient mapping ---------- */
+    const gradientMap = {
+      green:  'from-green-400/40  via-emerald-500/40  to-green-600/55',
+      blue:   'from-blue-400/40   via-cyan-500/40    to-blue-600/55',
+      orange: 'from-orange-400/40 via-amber-500/40   to-orange-600/55',
+      purple: 'from-purple-400/40 via-fuchsia-500/40 to-purple-600/55',
+      indigo: 'from-indigo-400/40 via-violet-500/40 to-indigo-600/55',
+      gray:   'from-gray-400/40   via-zinc-500/40    to-gray-600/75',
+      teal:   'from-teal-400/40   via-sky-500/40     to-teal-600/55',
+      pink:   'from-pink-400/40   via-rose-500/40    to-pink-600/55'
+    };
+    const gradientClasses = gradientMap[model.color] || gradientMap.gray;
+  
+    /* ---------- 2. Random scattering (unchanged) ---------- */
+    const maxXOffset = 45, maxYOffset = 45;
+    const seededRandom = a => {
+      let t = a + 1;
+      for (let i = 0; i < 5; i++) {
+        t = Math.sin(t) * 1000;
+        t -= Math.floor(t);
+      }
+      return t;
+    };
+    const randX  = seededRandom(index * 1.3)  * 2 - 1;
+    const randY  = seededRandom(index * 0.7 + 80) * 1.5 - 1;
+    const translateX = randX * maxXOffset;
+    const translateY = randY * maxYOffset;
+    const transformStyle = `transform: translate(${translateX}px, ${translateY}px);`;
+  
+    /* ---------- 3. Bubble gradient (for the glass orb) ---------- */
+    const bubbleGradient = {
+      green:'rgba(34,197,94,.12),rgba(16,185,129,.22),transparent',
+      blue:'rgba(59,130,246,.12),rgba(6,182,212,.22),transparent',
+      orange:'rgba(251,146,60,.12),rgba(245,158,11,.22),transparent',
+      purple:'rgba(168,85,247,.12),rgba(217,70,239,.22),transparent',
+      indigo:'rgba(99,102,241,.12),rgba(139,92,246,.22),transparent',
+      gray:'rgba(156,163,175,.12),rgba(113,113,122,.22),transparent',
+      teal:'rgba(20,184,166,.12),rgba(14,165,233,.22),transparent',
+      pink:'rgba(236,72,153,.12),rgba(225,29,72,.22),transparent'
+    };
+    const g = bubbleGradient[model.color] || bubbleGradient.gray;
+  
+    /* ---------- 4. Mark-up ---------- */
     return `
-        <div class="model-card-container flex flex-col">
-            <div class="model-card group relative flex flex-col items-center justify-center p-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700 dark:to-gray-800 hover:from-${model.color}-50 hover:to-white dark:hover:from-${model.color}-900/30 dark:hover:to-gray-800 rounded-2xl border border-gray-200 dark:border-gray-600 hover:border-${model.color}-300 dark:hover:border-${model.color}-600 transition-all duration-300 ease-in-out transform hover:-translate-y-2 hover:shadow-xl cursor-pointer"
-                 data-model-id="${model.id}"
-                 onmouseenter="showTooltip(event, '${model.id}')"
-                 onmouseleave="hideTooltip()">
-                <div class="bg-gradient-to-br from-${model.color}-400 to-${model.color}-600 rounded-2xl w-16 h-16 mb-4 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="${model.icon}"/>
-                    </svg>
-                </div>
-                <!-- Use font-bold for model name consistency -->
-                <span class="font-bold text-gray-700 dark:text-gray-200 group-hover:text-${model.color}-700 dark:group-hover:text-${model.color}-300 transition-colors duration-300 text-lg">${model.name}</span>
-                <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">${model.company}</span>
+      <div class="flex flex-col items-center" style="${transformStyle}">
+        <!-- Card wrapper -->
+        <div class="model-card group relative cursor-pointer
+                    transition-all duration-300 ease-out hover:-translate-y-1"
+             data-model-id="${model.id}"
+             onmouseenter="showTooltip(event,'${model.id}')"
+             onmouseleave="hideTooltip()">
+  
+          <!-- Extra glass bubble (orb) -->
+          <span class="absolute inset-0 -z-10 w-44 h-44 m-auto rounded-full
+                       backdrop-blur-[20px] border border-white/10
+                       bg-[radial-gradient(circle_at_50%_40%,${g})]
+                       animate-[drift_12s_ease-in-out_infinite_alternate]">
+          </span>
+  
+          <!-- Glow ring -->
+          <div class="absolute inset-3 bg-gradient-to-r ${{
+            green:'from-green-400/20 to-emerald-500/20',
+            blue:'from-blue-400/30 to-cyan-500/30',
+            orange:'from-orange-400/30 to-amber-500/30',
+            purple:'from-purple-400/30 to-fuchsia-500/30',
+            indigo:'from-indigo-400/30 to-violet-500/30',
+            gray:'from-gray-400/30 to-zinc-500/30',
+            teal:'from-teal-400/30 to-sky-500/30',
+            pink:'from-pink-400/30 to-rose-500/30'
+          }[model.color] || 'from-gray-400/20 to-gray-500/20'}
+                       rounded-full blur-2xl opacity-60 group-hover:opacity-80
+                       transition-opacity duration-500">
+          </div>
+  
+          <!-- Main button -->
+          <div class="relative w-32 h-32 flex flex-col items-center justify-center
+                      bg-gradient-to-br ${gradientClasses} text-white
+                      rounded-full shadow-[0_8px_24px_rgba(0,0,0,.25),inset_0_1px_0_rgba(255,255,255,.15)]
+                      border border-white/20
+                      group-hover:shadow-[0_12px_32px_rgba(0,0,0,.35),inset_0_1px_0_rgba(255,255,255,.25)]
+                      group-hover:scale-[1.05]
+                      transition-all duration-300 ease-out">
+            <div class="bg-white/10 rounded-full p-2 mb-1 backdrop-blur-[1px]">
+              <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="${model.icon}"/>
+              </svg>
             </div>
-            <button onclick="openModel('${model.info_url}')" class="mt-3 px-3 py-1 text-xs bg-brand-red-100 hover:bg-brand-red-200 dark:bg-brand-red-900/30 dark:hover:bg-brand-red-800/40 text-brand-red-700 dark:text-brand-red-300 rounded-lg transition duration-200 self-center flex items-center">
-                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                </svg>
-                Learn More
-            </button>
+            <span class="font-sans text-sm font-semibold tracking-tight
+                         drop-shadow-[0_1px_2px_rgba(0,0,0,.4)]">
+              ${model.name}
+            </span>
+          </div>
         </div>
+  
+        <!-- Learn-more link -->
+        <button onclick="openModel('${model.info_url}')"
+                class="mt-4 px-3 py-1 text-xs
+                       bg-brand-red-500/20 hover:bg-brand-red-500/30
+                       dark:bg-brand-red-900/20 dark:hover:bg-brand-red-800/30
+                       text-brand-red-700 dark:text-brand-red-300
+                       rounded-lg flex items-center space-x-1
+                       border border-brand-red-500/30 dark:border-brand-red-700/30
+                       transition-all duration-200 ease-out
+                       hover:scale-105 active:scale-95">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+          </svg>
+          <span>Learn More</span>
+        </button>
+      </div>
     `;
+  }
+
+// --- New Function: Draw Network Lines ---
+// --- Revised Function: Draw Network Lines (v4 - With Debugging) ---
+function drawNetworkLines() {
+    console.log("--- drawNetworkLines started ---");
+    const svgContainer = document.getElementById('network-lines');
+    const svg = svgContainer.querySelector('svg');
+
+    // --- Debugging: Check if container exists and has size ---
+    if (!svgContainer) {
+        console.error("Error: #network-lines container not found!");
+        return;
+    }
+    const containerRect = svgContainer.getBoundingClientRect();
+    console.log("Container Rect:", containerRect);
+    if (containerRect.width === 0 || containerRect.height === 0) {
+        console.warn("Warning: #network-lines container has zero width or height. Retrying in 100ms...");
+        // Retry once after a short delay if container is not sized yet
+        setTimeout(drawNetworkLines, 100);
+        return;
+    }
+    // --- End Debugging ---
+
+    // Clear any existing lines
+    svg.innerHTML = '';
+
+    // --- Crucial: Set SVG viewBox and size to match its container ---
+    svg.setAttribute('width', containerRect.width);
+    svg.setAttribute('height', containerRect.height);
+    svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
+    svg.style.position = 'absolute';
+    svg.style.top = '0';
+    svg.style.left = '0';
+
+    // Get all model card *buttons* (the round bubbles)
+    const modelButtons = document.querySelectorAll('.model-card > .relative');
+
+    // --- Debugging: Check if model buttons are found ---
+    console.log("Found model buttons:", modelButtons.length);
+    if (modelButtons.length < 2) {
+        console.warn("Not enough model buttons found to draw lines (need at least 2).");
+        return;
+    }
+    // --- End Debugging ---
+
+    // --- Store positions and elements ---
+    const nodes = [];
+
+    modelButtons.forEach((button, index) => { // Added index for logging
+        const rect = button.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2 - containerRect.left;
+        const centerY = rect.top + rect.height / 2 - containerRect.top;
+        nodes.push({ element: button, cx: centerX, cy: centerY });
+        // --- Debugging: Log individual node positions ---
+        console.log(`Node ${index} center: (${centerX.toFixed(2)}, ${centerY.toFixed(2)})`);
+        // --- End Debugging ---
+    });
+
+    // --- Connect nodes based on proximity (simple horizontal/vertical check) ---
+    const threshold = Math.min(containerRect.width, containerRect.height) * 0.3; // 30% of smaller dimension
+    console.log("Connection threshold:", threshold.toFixed(2));
+
+    let linesDrawn = 0;
+    for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+            const nodeA = nodes[i];
+            const nodeB = nodes[j];
+
+            // Calculate distance
+            const dx = Math.abs(nodeA.cx - nodeB.cx);
+            const dy = Math.abs(nodeA.cy - nodeB.cy);
+
+            // Connect if they are close enough horizontally OR vertically
+            if (dx < threshold || dy < threshold) { // Simplified connection logic
+                console.log(`Connecting node ${i} to node ${j}`); // Debug log
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', nodeA.cx);
+                line.setAttribute('y1', nodeA.cy);
+                line.setAttribute('x2', nodeB.cx);
+                line.setAttribute('y2', nodeB.cy);
+
+                // --- Make lines clearly visible for testing ---
+                line.setAttribute('stroke', '#ffffff'); // RED for high visibility
+                line.setAttribute('stroke-width', '1');
+                line.setAttribute('stroke-opacity', '0.4');
+                line.setAttribute('stroke-dasharray', '2,4'); // Dash pattern
+
+                svg.appendChild(line);
+                linesDrawn++;
+            }
+        }
+    }
+
+    console.log(`--- drawNetworkLines finished. Lines drawn: ${linesDrawn} ---`);
 }
 
 // Show tooltip (Reverted to original content)
@@ -208,9 +394,11 @@ function hideTooltip() {
 // Render models grid
 function renderModelsGrid() {
     const grid = document.getElementById('models-grid');
-    grid.innerHTML = models.map(model => createModelCard(model)).join('');
+    grid.innerHTML = models.map((model,index) => createModelCard(model, index)).join('');
     // Add click handlers for model cards (opening the model)
     grid.addEventListener('click', handleModelClick);
+    console.log("Scheduling drawNetworkLines...");
+    requestAnimationFrame(drawNetworkLines);
 }
 
 // Handle model click (Updated to prevent default and stop propagation)
