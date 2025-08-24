@@ -3,6 +3,8 @@ let isDarkMode = localStorage.getItem('darkMode') === 'true';
 let dashboardTabs = [];
 let isPatchNotesPanelOpen = false;
 let lastSeenPatchNoteId = parseInt(localStorage.getItem('lastSeenPatchNoteId')) || 0;
+let savedPrompts = [];
+const PROMPT_STORAGE_KEY = 'llmRouterPrompts';
 
 const bubbleGradients = {
     'green': 'linear-gradient(135deg, #10b981 0%, #059669 100%)', // Emerald 500 -> 600
@@ -30,6 +32,13 @@ function toggleDarkMode() {
     document.documentElement.classList.toggle('dark', isDarkMode);
 }
 
+function generateSimpleUUID() {
+    // Public Domain/MIT License - https://stackoverflow.com/a/2117523
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+}
+
 // Check for new patch notes and update UI
 function checkForNewPatchNotes() {
     const latestNoteId = patchNotes.length > 0 ? Math.max(...patchNotes.map(note => note.id)) : 0;
@@ -48,6 +57,685 @@ function checkForNewPatchNotes() {
         badge.classList.add('hidden');
     }
 }
+
+// --- Function to create the starfield background ---
+function createStarfield() {
+    const starContainer = document.getElementById('starfield-layer');
+    if (!starContainer) {
+        console.warn("Starfield layer not found.");
+        return;
+    }
+
+    // Clear existing stars (if any, e.g., on re-runs)
+    starContainer.innerHTML = '';
+
+    // Get viewport dimensions
+    const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+    const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+
+    // Decide number of stars based on screen size (roughly 1 star per 100px^2)
+    const density = 0.0001; // Stars per pixel
+    const numStars = Math.floor(vw * vh * density);
+
+    console.log(`Creating approximately ${numStars} stars for ${vw}x${vh} viewport.`);
+
+    for (let i = 0; i < numStars; i++) {
+        const star = document.createElement('div');
+        star.classList.add('absolute', 'rounded-full', 'bg-white'); // Basic white dot
+
+        // Random position
+        const left = Math.random() * 100; // Percentage
+        const top = Math.random() * 100;  // Percentage
+        star.style.left = `${left}%`;
+        star.style.top = `${top}%`;
+
+        // Random size (0.5px to 2px)
+        const size = Math.random() * 1.5 + 0.5;
+        star.style.width = `${size}px`;
+        star.style.height = `${size}px`;
+
+        // Random opacity (0.2 to 0.8) for subtle variation
+        const opacity = Math.random() * 0.6 + 0.2;
+        star.style.opacity = opacity;
+
+        // Optional: Very subtle twinkle animation (individual stars)
+        // Uncomment the next lines if you want individual star twinkling
+        /*
+        const duration = Math.random() * 5 + 3; // 3s to 8s
+        const delay = Math.random() * 5; // 0s to 5s delay
+        star.style.animation = `twinkle ${duration}s ease-in-out ${delay}s infinite alternate`;
+        */
+
+        starContainer.appendChild(star);
+    }
+}
+
+// --- Function to handle cursor glow parallax ---
+function setupCursorGlowParallax() {
+    console.log("--- Initializing Cursor Glow Parallax ---");
+    const glowElement = document.getElementById('cursor-glow');
+    if (!glowElement) {
+        console.error("ERROR: Cursor glow element (#cursor-glow) not found in the DOM!");
+        return;
+    }
+    console.log("SUCCESS: Found cursor glow element.");
+
+    let ticking = false;
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    const lerpFactor = 0.08; // Slightly slower for a more subtle effect
+
+    function onMouseMove(e) {
+        // Get the dimensions of the viewport
+        const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+        const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+
+        // Calculate the cursor position as a percentage (0 to 1) within the viewport
+        const cursorPercentX = e.clientX / vw;
+        const cursorPercentY = e.clientY / vh;
+
+        // Calculate the target position for the glow:
+        // It should move 10% of the cursor's distance across the viewport.
+        // If the cursor is at 100% (right edge), the glow's center should be at 10% of the viewport width from the left edge.
+        targetX = cursorPercentX * vw * 0.9;
+        targetY = cursorPercentY * vh * 0.9;
+
+        // console.log("Cursor %:", cursorPercentX.toFixed(2), cursorPercentY.toFixed(2), "Target:", targetX.toFixed(2), targetY.toFixed(2)); // Debug
+
+        if (!ticking) {
+            window.requestAnimationFrame(updateGlowPosition);
+            ticking = true;
+        }
+    }
+
+    function updateGlowPosition() {
+        // Simple linear interpolation for smooth movement
+        currentX += (targetX - currentX) * lerpFactor;
+        currentY += (targetY - currentY) * lerpFactor;
+
+        // Apply the calculated position using translate
+        // The element is already centered with -translate-x-1/2 -translate-y-1/2
+        glowElement.style.transform = `translate(${currentX}px, ${currentY}px)`;
+        // console.log("Glow position updated:", currentX.toFixed(2), currentY.toFixed(2)); // Debug
+
+        // Continue updating if not close enough to target
+        const dx = Math.abs(targetX - currentX);
+        const dy = Math.abs(targetY - currentY);
+        if (dx > 0.1 || dy > 0.1) { // Tighter threshold for smoother stop
+            window.requestAnimationFrame(updateGlowPosition);
+        } else {
+            ticking = false;
+        }
+    }
+
+    // Attach the mouse move listener
+    document.addEventListener('mousemove', onMouseMove);
+
+    // Optional: Hide glow when mouse leaves window
+    document.addEventListener('mouseleave', () => {
+        glowElement.style.opacity = '0';
+    });
+    document.addEventListener('mouseenter', () => {
+        glowElement.style.opacity = ''; // Reset to CSS opacity
+    });
+
+    console.log("--- Cursor Glow Parallax setup complete ---");
+}
+// --- End Cursor Glow Function ---
+
+// Load prompts from localStorage
+function loadSavedPrompts() {
+    try {
+        const data = localStorage.getItem(PROMPT_STORAGE_KEY);
+        if (data) {
+            savedPrompts = JSON.parse(data);
+            // Basic validation
+            if (!Array.isArray(savedPrompts)) {
+                console.warn('Saved prompts data is not an array, resetting.');
+                savedPrompts = [];
+            }
+        } else {
+            savedPrompts = []; // Initialize as empty array if no data
+        }
+    } catch (error) {
+        console.error('Failed to load saved prompts:', error);
+        savedPrompts = []; // Reset on error
+    }
+    console.log('Loaded prompts:', savedPrompts); // Debug
+}
+
+// --- Revised renderPromptLibrary function with null checks ---
+function renderPromptLibrary() {
+    console.log("--- renderPromptLibraryFixed called ---");
+    
+    const container = document.getElementById('prompt-list-content');
+    if (!container) {
+        console.error("Container not found");
+        return;
+    }
+
+    // Handle the missing no-prompts-message element by recreating it if needed
+    let noPromptsMessage = document.getElementById('no-prompts-message');
+    if (!noPromptsMessage) {
+        console.log("no-prompts-message element missing, recreating it");
+        
+        const modalContent = container.parentElement;
+        if (modalContent) {
+            noPromptsMessage = document.createElement('div');
+            noPromptsMessage.id = 'no-prompts-message';
+            noPromptsMessage.className = 'text-center text-gray-500 dark:text-gray-400 p-4 hidden';
+            noPromptsMessage.textContent = 'No prompts saved yet.';
+            modalContent.insertBefore(noPromptsMessage, container);
+        }
+    }
+
+    if (savedPrompts.length === 0) {
+        container.innerHTML = '';
+        if (noPromptsMessage) {
+            noPromptsMessage.classList.remove('hidden');
+        }
+        return;
+    }
+
+    console.log(`Rendering ${savedPrompts.length} prompts`);
+    if (noPromptsMessage) {
+        noPromptsMessage.classList.add('hidden');
+    }
+
+    const sortedPrompts = [...savedPrompts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    container.innerHTML = sortedPrompts.map(prompt => {
+        const previewContent = prompt.content.length > 100 ? prompt.content.substring(0, 100) + '...' : prompt.content;
+        const formattedDate = new Date(prompt.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+        return `
+            <div class="prompt-item p-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 rounded-lg" data-prompt-id="${prompt.id}">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-baseline">
+                            <h4 class="font-semibold text-gray-800 dark:text-gray-200 truncate">${prompt.title}</h4>
+                            ${prompt.tag ? `<span class="ml-2 text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">${prompt.tag}</span>` : ''}
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">${previewContent}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-2">${formattedDate}</p>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <button class="edit-prompt-btn p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition duration-150" data-prompt-id="${prompt.id}" aria-label="Edit prompt">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                        <button class="delete-prompt-btn p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition duration-150" data-prompt-id="${prompt.id}" aria-label="Delete prompt">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-2 flex justify-end">
+                    <button class="copy-prompt-btn px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition duration-200 flex items-center" data-prompt-content="${encodeURIComponent(prompt.content)}">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                        Copy
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Re-attach event listeners
+    container.querySelectorAll('.delete-prompt-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const promptId = e.currentTarget.dataset.promptId;
+            deletePrompt(promptId);
+        });
+    });
+
+    // NEW: Edit button event listeners
+    container.querySelectorAll('.edit-prompt-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const promptId = e.currentTarget.dataset.promptId;
+            editPrompt(promptId);
+        });
+    });
+
+    container.querySelectorAll('.copy-prompt-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const encodedContent = e.currentTarget.dataset.promptContent;
+            const content = decodeURIComponent(encodedContent);
+            copyTextToClipboard(content, e.currentTarget);
+        });
+    });
+
+    console.log("--- renderPromptLibraryFixed completed successfully ---");
+}
+
+// Edit prompt function
+function editPrompt(promptId) {
+    const prompt = savedPrompts.find(p => p.id === promptId);
+    if (!prompt) {
+        console.error('Prompt not found for editing:', promptId);
+        return;
+    }
+
+    showEditPromptModal(prompt);
+}
+
+// Edit prompt modal
+function showEditPromptModal(prompt) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]'; // Higher than delete modal
+    
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">Edit Prompt</h3>
+                <button id="close-edit-modal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="edit-prompt-form" class="space-y-4">
+                <div>
+                    <label for="edit-prompt-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                    <input type="text" id="edit-prompt-title" value="${prompt.title}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
+                </div>
+                
+                <div>
+                    <label for="edit-prompt-content" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content</label>
+                    <textarea id="edit-prompt-content" rows="8" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-vertical" required>${prompt.content}</textarea>
+                </div>
+                
+                <div>
+                    <label for="edit-prompt-tag" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tag (Optional)</label>
+                    <input type="text" id="edit-prompt-tag" value="${prompt.tag || ''}" list="model-tags" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="e.g., Claude, GPT-4, Writing">
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600">
+                    <button type="button" id="cancel-edit" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" id="save-edit" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition duration-200">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    // Get form elements
+    const form = modal.querySelector('#edit-prompt-form');
+    const titleInput = modal.querySelector('#edit-prompt-title');
+    const contentInput = modal.querySelector('#edit-prompt-content');
+    const tagInput = modal.querySelector('#edit-prompt-tag');
+    const saveButton = modal.querySelector('#save-edit');
+    const cancelButton = modal.querySelector('#cancel-edit');
+    const closeButton = modal.querySelector('#close-edit-modal');
+
+    // Close modal function
+    const closeModal = () => {
+        if (document.body.contains(modal)) {
+            document.body.removeChild(modal);
+        }
+    };
+
+    // Event listeners
+    closeButton.addEventListener('click', closeModal);
+    cancelButton.addEventListener('click', closeModal);
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Handle form submission
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const newTitle = titleInput.value.trim();
+        const newContent = contentInput.value.trim();
+        const newTag = tagInput.value.trim();
+
+        if (!newTitle || !newContent) {
+            alert('Title and content are required.');
+            return;
+        }
+
+        // Show saving state
+        saveButton.disabled = true;
+        saveButton.innerHTML = 'Saving...';
+
+        // Update the prompt
+        const promptIndex = savedPrompts.findIndex(p => p.id === prompt.id);
+        if (promptIndex !== -1) {
+            savedPrompts[promptIndex] = {
+                ...savedPrompts[promptIndex],
+                title: newTitle,
+                content: newContent,
+                tag: newTag,
+                updatedAt: new Date().toISOString()
+            };
+
+            savePrompts();
+            
+            // Close modal and refresh the list
+            closeModal();
+            
+            setTimeout(() => {
+                renderPromptLibrary();
+            }, 100);
+
+            console.log('Prompt updated:', savedPrompts[promptIndex]);
+        }
+    });
+
+    // Add to DOM and focus title input
+    document.body.appendChild(modal);
+    titleInput.focus();
+    titleInput.select(); // Select all text for easy editing
+}
+
+// Save prompts to localStorage
+function savePrompts() {
+    try {
+        localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(savedPrompts));
+        console.log('Prompts saved to localStorage'); // Debug
+    } catch (error) {
+        console.error('Failed to save prompts:', error);
+        // TODO: Optionally, show an error message to the user
+        alert('Failed to save prompt. Storage might be full.');
+    }
+}
+
+// --- Revised confirmSavePrompt function: Update UI before hiding form ---
+function confirmSavePrompt() {
+    const titleInput = document.getElementById('prompt-title-input');
+    const contentInput = document.getElementById('prompt-content-input');
+    const tagInput = document.getElementById('prompt-tag-input');
+
+    const title = titleInput.value;
+    const content = contentInput.value;
+    const tag = tagInput.value;
+
+    const saveButton = document.getElementById('confirm-save-prompt');
+    const originalButtonHTML = saveButton.innerHTML;
+
+    saveButton.disabled = true;
+    saveButton.innerHTML = `
+        <svg class="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Saving...
+    `;
+
+    const result = addPrompt(title, content, tag);
+
+    if (result.success) {
+        // Clear form inputs
+        titleInput.value = '';
+        contentInput.value = '';
+        tagInput.value = '';
+
+        // Show success state
+        saveButton.innerHTML = `
+            <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Saved!
+        `;
+
+        // Use the fixed render function that handles missing no-prompts-message
+        setTimeout(() => {
+            renderPromptLibrary();
+        }, 100);
+
+        // Schedule UI cleanup
+        setTimeout(() => {
+            document.getElementById('save-prompt-section').classList.add('hidden');
+            saveButton.disabled = false;
+            saveButton.innerHTML = originalButtonHTML;
+            
+            const listContainer = document.getElementById('prompt-list-container');
+            if (listContainer) {
+                listContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }, 200);
+
+    } else {
+        alert(result.message || 'Failed to save prompt.');
+        saveButton.disabled = false;
+        saveButton.innerHTML = originalButtonHTML;
+    }
+}
+// --- End Revised confirmSavePrompt ---
+
+// Add a new prompt
+function addPrompt(title, content, tag = '') {
+    if (!title.trim() || !content.trim()) {
+        return { success: false, message: 'Title and content are required.' };
+    }
+
+    try {
+        const newPrompt = {
+            id: generateSimpleUUID(),
+            title: title.trim(),
+            content: content.trim(),
+            tag: tag.trim(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        savedPrompts.unshift(newPrompt);
+        savePrompts(); // Save to localStorage
+        console.log('Prompt added and saved:', newPrompt);
+
+        // Return success. UI update is handled by the caller (e.g., confirmSavePrompt).
+        return { success: true, message: 'Prompt saved successfully!', prompt: newPrompt };
+
+    } catch (error) {
+        console.error("Error inside addPrompt logic:", error);
+        return { success: false, message: 'An error occurred while saving the prompt.' };
+    }
+}
+
+// Delete a prompt by ID
+function deletePrompt(promptId) {
+    const prompt = savedPrompts.find(p => p.id === promptId);
+    if (!prompt) return;
+
+    showCustomConfirmDialog({
+        title: 'Delete Prompt',
+        message: `Are you sure you want to delete "${prompt.title}"?`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-red-500 hover:bg-red-600 text-white',
+        onConfirm: () => {
+            savedPrompts = savedPrompts.filter(p => p.id !== promptId);
+            savePrompts();
+            renderPromptLibrary(); // Use your working render function
+            console.log('Prompt deleted:', promptId);
+        }
+    });
+}
+
+// Custom confirmation dialog function
+function showCustomConfirmDialog({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', confirmClass = 'bg-blue-500 hover:bg-blue-600 text-white', onConfirm, onCancel }) {
+    // Create modal backdrop
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]'; // Higher z-index than prompt library
+    
+    // Create modal content
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div class="flex items-center mb-4">
+                <div class="bg-red-100 dark:bg-red-900/20 rounded-full p-2 mr-3">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">${title}</h3>
+            </div>
+            <p class="text-gray-700 dark:text-gray-300 mb-6">${message}</p>
+            <div class="flex space-x-3 justify-end">
+                <button id="cancel-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition duration-200 font-medium">
+                    ${cancelText}
+                </button>
+                <button id="confirm-btn" class="px-4 py-2 ${confirmClass} rounded-lg transition duration-200 font-medium">
+                    ${confirmText}
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Add event listeners
+    const cancelBtn = modal.querySelector('#cancel-btn');
+    const confirmBtn = modal.querySelector('#confirm-btn');
+
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+        if (onCancel) onCancel();
+    });
+
+    confirmBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+        if (onConfirm) onConfirm();
+    });
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+            if (onCancel) onCancel();
+        }
+    });
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', handleEscape);
+            if (onCancel) onCancel();
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Add to DOM
+    document.body.appendChild(modal);
+
+    // Focus the confirm button for better UX
+    confirmBtn.focus();
+}
+
+
+// Helper function to copy text and provide visual feedback
+function copyTextToClipboard(text, buttonElement) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Provide visual feedback
+        const originalHTML = buttonElement.innerHTML;
+        buttonElement.innerHTML = `
+            <svg class="w-3 h-3 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Copied!
+        `;
+        setTimeout(() => {
+            buttonElement.innerHTML = originalHTML;
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy text to clipboard.');
+    });
+}
+
+
+// Populate the datalist for tags with model names
+function populateModelTagsDatalist() {
+    const datalist = document.getElementById('model-tags');
+    if (!datalist) return;
+
+    // Get unique model names from the models array
+    const uniqueModelNames = [...new Set(models.map(model => model.name))];
+
+    datalist.innerHTML = uniqueModelNames.map(name => `<option value="${name}">`).join('');
+}
+
+// --- Prompt Library Modal Functions ---
+
+let isPromptLibraryOpen = false;
+
+function togglePromptLibrary() {
+    const modal = document.getElementById('prompt-library-modal');
+    isPromptLibraryOpen = !isPromptLibraryOpen;
+    if (isPromptLibraryOpen) {
+        modal.classList.remove('hidden');
+        renderPromptLibrary(); // Render prompts when opening
+        populateModelTagsDatalist(); // Populate tags dropdown
+    } else {
+        modal.classList.add('hidden');
+        // Hide the save form if it was open
+        document.getElementById('save-prompt-section').classList.add('hidden');
+        // Clear inputs
+        document.getElementById('prompt-title-input').value = '';
+        document.getElementById('prompt-content-input').value = '';
+        document.getElementById('prompt-tag-input').value = '';
+    }
+}
+
+function closePromptLibrary() {
+    isPromptLibraryOpen = false;
+    document.getElementById('prompt-library-modal').classList.add('hidden');
+     // Hide the save form if it was open
+     document.getElementById('save-prompt-section').classList.add('hidden');
+     // Clear inputs
+     document.getElementById('prompt-title-input').value = '';
+     document.getElementById('prompt-content-input').value = '';
+     document.getElementById('prompt-tag-input').value = '';
+}
+
+// Show the "Save Prompt" form section within the modal
+function showSavePromptForm() {
+    document.getElementById('save-prompt-section').classList.remove('hidden');
+    // Scroll the modal content to the save form
+    const modalContent = document.getElementById('prompt-library-modal').querySelector('.flex-col'); // Adjust selector if needed
+    if (modalContent) {
+        modalContent.scrollTop = modalContent.scrollHeight;
+    }
+    // TODO: Optionally, pre-fill content here if you have a way to get it (e.g., from a specific dashboard tab/input)
+    // For now, it's left for the user to paste/type.
+}
+
+// Cancel saving a new prompt
+function cancelSavePrompt() {
+    document.getElementById('save-prompt-section').classList.add('hidden');
+    // Clear inputs
+    document.getElementById('prompt-title-input').value = '';
+    document.getElementById('prompt-content-input').value = '';
+    document.getElementById('prompt-tag-input').value = '';
+}
+
+
+
+
+// --- End Prompt Library Modal Functions ---
 
 // Toggle patch notes panel
 function togglePatchNotesPanel() {
@@ -803,6 +1491,7 @@ function setupBubbleInteractions() {
 // Initialize the app
 function initializeApp() {
     initializeDarkMode();
+    loadSavedPrompts(); // --- NEW: Load prompts on startup ---
     try {
         const userData = localStorage.getItem('user');
         if (userData) {
@@ -813,12 +1502,42 @@ function initializeApp() {
         console.error('Failed to load user ', error);
         localStorage.removeItem('user');
     }
+    
+    // --- Initialize Parallax Background ---
+    createStarfield(); // Generate stars
+    setupCursorGlowParallax(); // Setup cursor tracking
+    // --- End Parallax Background Init ---
+    
     // Event listeners
     document.getElementById('signout-btn').addEventListener('click', handleSignOut);
     document.getElementById('demo-login').addEventListener('click', handleDemoLogin);
     document.getElementById('theme-toggle').addEventListener('click', toggleDarkMode);
     document.getElementById('dashboard-toggle').addEventListener('click', toggleDashboard);
     document.getElementById('add-model-tab').addEventListener('click', showAddModelModal);
+    // --- NEW: Add Prompt Library Event Listeners ---
+    document.getElementById('prompt-library-toggle').addEventListener('click', togglePromptLibrary);
+    document.getElementById('close-prompt-library').addEventListener('click', closePromptLibrary);
+    document.getElementById('show-save-prompt-form').addEventListener('click', showSavePromptForm);
+    document.getElementById('cancel-save-prompt').addEventListener('click', cancelSavePrompt);
+    document.getElementById('confirm-save-prompt').addEventListener('click', confirmSavePrompt);
+    // Click outside to close prompt library
+    document.getElementById('prompt-library-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'prompt-library-modal') { // Check if click was directly on the backdrop
+             closePromptLibrary();
+        }
+    });
+    // Close prompt library with Escape key
+    document.addEventListener('keydown', (e) => {
+        // ... (existing Escape key logic for patch notes) ...
+        if (e.key === 'Escape') { // Simplified check
+             if (isPatchNotesPanelOpen) {
+                 closePatchNotesPanel();
+             }
+             if (isPromptLibraryOpen) { // --- NEW: Close on Escape ---
+                 closePromptLibrary();
+             }
+        }
+    });
     // New buttons
     document.getElementById('live-comparison-btn').addEventListener('click', () => openModel('https://lmarena.ai/'));
     document.getElementById('benchmarks-btn').addEventListener('click', () => openModel('https://livebench.ai/#/'));
