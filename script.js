@@ -5,6 +5,7 @@ let isPatchNotesPanelOpen = false;
 let lastSeenPatchNoteId = parseInt(localStorage.getItem('lastSeenPatchNoteId')) || 0;
 let savedPrompts = [];
 const PROMPT_STORAGE_KEY = 'llmRouterPrompts';
+let currentUserToken = null;
 
 const bubbleGradients = {
     'green': 'linear-gradient(135deg, #10b981 0%, #059669 100%)', // Emerald 500 -> 600
@@ -291,7 +292,8 @@ function renderPromptLibrary() {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             const promptId = e.currentTarget.dataset.promptId;
-            deletePrompt(promptId);
+            //deletePrompt(promptId);
+            deletePromptFromServer(promptId); // NEW
         });
     });
 
@@ -300,7 +302,7 @@ function renderPromptLibrary() {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             const promptId = e.currentTarget.dataset.promptId;
-            editPrompt(promptId);
+            editPromptfromServer(promptId);
         });
     });
 
@@ -327,131 +329,333 @@ function editPrompt(promptId) {
     showEditPromptModal(prompt);
 }
 
+// Helper function to get headers with Authorization
+function getAuthHeaders() {
+    if (!currentUserToken) {
+        console.warn("No user token available for API request.");
+        // Depending on your desired behavior, you might throw an error or return basic headers
+        // For now, let's return basic headers and let the API respond with 401
+        // A better UI would disable prompt features if not logged in properly
+        return {
+            'Content-Type': 'application/json'
+            // 'Authorization': `Bearer ${currentUserToken}` // Omitted if no token
+        };
+    }
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentUserToken}`
+    };
+}
+
+// Load prompts from the backend server
+async function loadPromptsFromServer() {
+    if (!currentUserToken) {
+        console.log("Not logged in, cannot load prompts from server.");
+        // Optionally, clear the local list
+        // savedPrompts = [];
+        // renderPromptLibrary();
+        return;
+    }
+
+    const url = 'http://127.0.0.1:8000/api/prompts'; // Adjust URL if hosted elsewhere
+    const headers = getAuthHeaders();
+
+    try {
+        console.log("Fetching prompts from server...");
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                 console.error("Unauthorized: Token might be invalid or expired when loading prompts.");
+                 alert("Session expired or invalid. Please log out and log back in.");
+                 // Optionally trigger logout
+                 // handleSignOut();
+                 return;
+            }
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const promptsData = await response.json();
+        console.log("Prompts loaded from server:", promptsData);
+        savedPrompts = promptsData; // Update the local array
+        renderPromptLibrary(); // Refresh the UI
+
+    } catch (error) {
+        console.error("Error loading prompts from server:", error);
+        alert("Failed to load prompts from the server. Please try again later.");
+        // Optionally, fall back to local storage if it existed before?
+        // loadSavedPrompts(); // This would be your old localStorage function
+    }
+}
+
+// Add a new prompt to the backend server
+async function addPromptToServer(title, content, tag = '') {
+    if (!currentUserToken) {
+        alert("You need to be logged in to save prompts.");
+        return { success: false, message: 'Not logged in.' };
+    }
+
+    if (!title.trim() || !content.trim()) {
+        alert('Title and content are required to save a prompt.');
+        return { success: false, message: 'Title and content are required.' };
+    }
+
+    const url = 'http://127.0.0.1:8000/api/prompts'; // Adjust URL if hosted elsewhere
+    const headers = getAuthHeaders();
+    const promptData = {
+        title: title.trim(),
+        content: content.trim(),
+        tag: tag.trim()
+    };
+
+    try {
+        console.log("Saving prompt to server:", promptData);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(promptData)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                 console.error("Unauthorized: Token might be invalid or expired when saving prompt.");
+                 alert("Session expired or invalid. Please log out and log back in.");
+                 // Optionally trigger logout
+                 // handleSignOut();
+                 return { success: false, message: 'Unauthorized. Please log in again.' };
+            }
+            const errorText = await response.text();
+            console.error("Server error response:", errorText);
+            throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorText}`);
+        }
+
+        const newPrompt = await response.json();
+        console.log("Prompt saved to server:", newPrompt);
+        // Add the newly created prompt (with server-assigned ID) to the local list
+        savedPrompts.unshift(newPrompt);
+        renderPromptLibrary(); // Refresh the UI
+        return { success: true, message: 'Prompt saved successfully!', prompt: newPrompt };
+
+    } catch (error) {
+        console.error("Error saving prompt to server:", error);
+        alert("Failed to save prompt to the server. Please try again later.");
+        return { success: false, message: 'Failed to save prompt.' };
+    }
+}
+
+// Delete a prompt from the backend server
+async function deletePromptFromServer(promptId) {
+    if (!currentUserToken) {
+        alert("You need to be logged in to delete prompts.");
+        return;
+    }
+
+    // Confirm deletion (you can use your existing showCustomConfirmDialog if preferred)
+    if (!confirm('Are you sure you want to delete this prompt?')) {
+        return; // User cancelled
+    }
+
+    const url = `http://127.0.0.1:8000/api/prompts/${promptId}`; // Adjust URL if hosted elsewhere
+    const headers = getAuthHeaders();
+
+    try {
+        console.log(`Deleting prompt ${promptId} from server...`);
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: headers
+            // No body needed for DELETE
+        });
+
+        if (!response.ok) {
+             if (response.status === 401) {
+                 console.error("Unauthorized: Token might be invalid or expired when deleting prompt.");
+                 alert("Session expired or invalid. Please log out and log back in.");
+                 // Optionally trigger logout
+                 // handleSignOut();
+                 return;
+             }
+             if (response.status === 404) {
+                 console.warn(`Prompt ${promptId} not found on server.`);
+                 // Still remove it locally if it exists?
+             }
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        // Server responded with 204 No Content (or 200 OK), deletion successful
+        console.log(`Prompt ${promptId} deleted from server.`);
+        // Remove the prompt from the local list
+        savedPrompts = savedPrompts.filter(prompt => prompt.id !== promptId);
+        renderPromptLibrary(); // Refresh the UI
+
+    } catch (error) {
+        console.error("Error deleting prompt from server:", error);
+        alert("Failed to delete prompt from the server. Please try again later.");
+        // Optionally, retry or keep it in the list?
+    }
+}
+
+// --- NEW: API Function to Update a Prompt on the Server ---
+async function updatePromptOnServer(promptId, updateData) {
+    if (!currentUserToken) {
+        alert("You need to be logged in to update prompts.");
+        return { success: false, message: 'Not logged in.' };
+    }
+
+    if (!promptId) {
+        console.error("updatePromptOnServer called without a promptId");
+        return { success: false, message: 'Prompt ID is required for update.' };
+    }
+
+    // Basic validation of updateData
+    if (!updateData.title?.trim() || !updateData.content?.trim()) {
+         alert('Title and content are required.');
+         return { success: false, message: 'Title and content are required.' };
+    }
+
+    const url = `http://127.0.0.1:8000/api/prompts/${encodeURIComponent(promptId)}`;
+    const headers = getAuthHeaders(); // Your existing function
+
+    try {
+        console.log(`Updating prompt ${promptId} on server:`, updateData);
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers: headers,
+            body: JSON.stringify(updateData)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                console.error("Unauthorized: Token might be invalid/expired when updating prompt.");
+                alert("Session expired or invalid. Please log out and log back in.");
+                return { success: false, message: 'Unauthorized. Please log in again.' };
+            }
+            if (response.status === 404) {
+                 console.warn(`Prompt ${promptId} not found on server for update.`);
+                 alert("Prompt not found on server. It might have been deleted.");
+                 // Optionally remove it locally?
+                 savedPrompts = savedPrompts.filter(p => p.id !== promptId);
+                 renderPromptLibrary();
+                 return { success: false, message: 'Prompt not found.' };
+            }
+            const errorText = await response.text();
+            console.error(`Server error (${response.status}) updating prompt:`, errorText);
+            throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorText}`);
+        }
+
+        const updatedPrompt = await response.json();
+        console.log("Prompt updated on server:", updatedPrompt);
+
+        // Update the prompt in the local list
+        const index = savedPrompts.findIndex(p => p.id === promptId);
+        if (index !== -1) {
+            savedPrompts[index] = updatedPrompt; // Replace with server data (includes updated_at)
+        } else {
+            // If not found locally (shouldn't happen usually), add it
+            console.warn(`Prompt ${promptId} updated but not found locally. Adding.`);
+            savedPrompts.unshift(updatedPrompt);
+        }
+        renderPromptLibrary(); // Refresh the UI
+
+        return { success: true, message: 'Prompt updated successfully!', prompt: updatedPrompt };
+
+    } catch (error) {
+        console.error("Error updating prompt on server:", error);
+        alert("Failed to update prompt on the server. Please try again later.");
+        return { success: false, message: 'Failed to update prompt.' };
+    }
+}
+// --- END NEW: updatePromptOnServer ---
+
 // Edit prompt modal
 function showEditPromptModal(prompt) {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]'; // Higher than delete modal
-    
-    modal.innerHTML = `
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">Edit Prompt</h3>
-                <button id="close-edit-modal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            
-            <form id="edit-prompt-form" class="space-y-4">
-                <div>
-                    <label for="edit-prompt-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
-                    <input type="text" id="edit-prompt-title" value="${prompt.title}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
-                </div>
-                
-                <div>
-                    <label for="edit-prompt-content" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content</label>
-                    <textarea id="edit-prompt-content" rows="8" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-vertical" required>${prompt.content}</textarea>
-                </div>
-                
-                <div>
-                    <label for="edit-prompt-tag" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tag (Optional)</label>
-                    <input type="text" id="edit-prompt-tag" value="${prompt.tag || ''}" list="model-tags" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="e.g., Claude, GPT-4, Writing">
-                </div>
-                
-                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600">
-                    <button type="button" id="cancel-edit" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition duration-200">
-                        Cancel
-                    </button>
-                    <button type="submit" id="save-edit" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition duration-200">
-                        Save Changes
-                    </button>
-                </div>
-            </form>
-        </div>
-    `;
+    if (!prompt) {
+        console.error("Cannot show edit modal, prompt is null/undefined.");
+        return;
+    }
 
-    // Get form elements
-    const form = modal.querySelector('#edit-prompt-form');
-    const titleInput = modal.querySelector('#edit-prompt-title');
-    const contentInput = modal.querySelector('#edit-prompt-content');
-    const tagInput = modal.querySelector('#edit-prompt-tag');
-    const saveButton = modal.querySelector('#save-edit');
-    const cancelButton = modal.querySelector('#cancel-edit');
-    const closeButton = modal.querySelector('#close-edit-modal');
+    // Ensure the main prompt library modal is open
+    if (!isPromptLibraryOpen) {
+        console.log("Prompt library not open, opening it first...");
+        togglePromptLibrary(); // This will open it and render
+        // We need to wait a bit for the modal and its elements to be added to the DOM
+        // A simple setTimeout can work, or we could use a more robust method like waiting for an event.
+        setTimeout(() => {
+            _populateAndSetupEditForm(prompt);
+        }, 100); // Adjust delay if needed, or find a better trigger
+    } else {
+        _populateAndSetupEditForm(prompt);
+    }
+}
 
-    // Close modal function
-    const closeModal = () => {
-        if (document.body.contains(modal)) {
-            document.body.removeChild(modal);
-        }
-    };
+// Helper function to handle the actual population and setup
+// This avoids duplicating code and handles the async nature of opening the modal
+function _populateAndSetupEditForm(prompt) {
+    console.log("Populating edit form for prompt ID:", prompt.id);
 
-    // Event listeners
-    closeButton.addEventListener('click', closeModal);
-    cancelButton.addEventListener('click', closeModal);
+    // Get the shared save/edit prompt section
+    const savePromptSection = document.getElementById('save-prompt-section');
+    if (!savePromptSection) {
+        console.error("Save/Edit prompt section (#save-prompt-section) not found.");
+        return;
+    }
 
-    // Close on backdrop click
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
-    });
+    // Get the input fields within the section
+    const titleInput = document.getElementById('prompt-title-input');
+    const contentInput = document.getElementById('prompt-content-input');
+    const tagInput = document.getElementById('prompt-tag-input');
 
-    // Close on Escape key
-    const handleEscape = (e) => {
-        if (e.key === 'Escape') {
-            closeModal();
-            document.removeEventListener('keydown', handleEscape);
-        }
-    };
-    document.addEventListener('keydown', handleEscape);
+    if (!titleInput || !contentInput || !tagInput) {
+        console.error("One or more input fields for the prompt form not found.");
+        return;
+    }
 
-    // Handle form submission
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        
-        const newTitle = titleInput.value.trim();
-        const newContent = contentInput.value.trim();
-        const newTag = tagInput.value.trim();
+    // Populate the form fields with the existing prompt data
+    titleInput.value = prompt.title || '';
+    contentInput.value = prompt.content || '';
+    tagInput.value = prompt.tag || '';
 
-        if (!newTitle || !newContent) {
-            alert('Title and content are required.');
-            return;
-        }
+    // Show the form section if it's hidden
+    savePromptSection.classList.remove('hidden');
 
-        // Show saving state
-        saveButton.disabled = true;
-        saveButton.innerHTML = 'Saving...';
+    // --- Crucially: Change the UI to reflect editing mode ---
+    const saveButton = document.getElementById('confirm-save-prompt');
+    if (saveButton) {
+        // Store the original button HTML (if not already stored)
+        // A more robust way is to manage state explicitly or always reset from a known template
+        // For now, we'll change the text/icon directly
 
-        // Update the prompt
-        const promptIndex = savedPrompts.findIndex(p => p.id === prompt.id);
-        if (promptIndex !== -1) {
-            savedPrompts[promptIndex] = {
-                ...savedPrompts[promptIndex],
-                title: newTitle,
-                content: newContent,
-                tag: newTag,
-                updatedAt: new Date().toISOString()
-            };
+        // Change button text and icon to "Update Prompt"
+        saveButton.innerHTML = `
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Update Prompt
+        `;
 
-            savePrompts();
-            
-            // Close modal and refresh the list
-            closeModal();
-            
-            setTimeout(() => {
-                renderPromptLibrary();
-            }, 100);
+        // Use the data attribute on the form section to indicate we are editing
+        // and store the ID of the prompt being edited
+        savePromptSection.setAttribute('data-editing-prompt-id', prompt.id);
 
-            console.log('Prompt updated:', savedPrompts[promptIndex]);
-        }
-    });
+        console.log(`Edit mode activated for prompt ID: ${prompt.id}`);
+    } else {
+        console.error("Confirm save button not found.");
+    }
 
-    // Add to DOM and focus title input
-    document.body.appendChild(modal);
+    // Optional: Scroll the modal to the form section
+    const modalContent = document.getElementById('prompt-library-modal')?.querySelector('.flex-col'); // Adjust selector if needed in your HTML
+    if (modalContent) {
+        // Give it a moment for the DOM to settle after removing 'hidden'
+        requestAnimationFrame(() => {
+             modalContent.scrollTop = modalContent.scrollHeight;
+        });
+    }
+
+    // Optional: Focus the title input for immediate editing
     titleInput.focus();
-    titleInput.select(); // Select all text for easy editing
+    titleInput.select();
 }
 
 // Save prompts to localStorage
@@ -477,54 +681,112 @@ function confirmSavePrompt() {
     const tag = tagInput.value;
 
     const saveButton = document.getElementById('confirm-save-prompt');
-    const originalButtonHTML = saveButton.innerHTML;
+    const savePromptSection = document.getElementById('save-prompt-section');
+    const originalButtonHTML = saveButton.innerHTML; // Capture original HTML *before* changing it
 
+    // --- Check if we are editing an existing prompt ---
+    const editingPromptId = savePromptSection?.getAttribute('data-editing-prompt-id');
+    const isEditing = Boolean(editingPromptId && editingPromptId !== 'null');
+
+    // Basic validation
+    if (!title.trim() || !content.trim()) {
+        alert('Title and content are required.');
+        return;
+    }
+
+    // --- Update UI to show saving state ---
     saveButton.disabled = true;
+    // Determine button text based on action
+    const actionText = isEditing ? "Updating..." : "Saving...";
     saveButton.innerHTML = `
         <svg class="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Saving...
+        ${actionText}
     `;
 
-    const result = addPrompt(title, content, tag);
-
-    if (result.success) {
-        // Clear form inputs
-        titleInput.value = '';
-        contentInput.value = '';
-        tagInput.value = '';
-
-        // Show success state
-        saveButton.innerHTML = `
-            <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-            Saved!
-        `;
-
-        // Use the fixed render function that handles missing no-prompts-message
-        setTimeout(() => {
-            renderPromptLibrary();
-        }, 100);
-
-        // Schedule UI cleanup
-        setTimeout(() => {
-            document.getElementById('save-prompt-section').classList.add('hidden');
-            saveButton.disabled = false;
-            saveButton.innerHTML = originalButtonHTML;
-            
-            const listContainer = document.getElementById('prompt-list-container');
-            if (listContainer) {
-                listContainer.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-        }, 200);
-
+    // --- Decide which API function to call ---
+    let savePromise;
+    if (isEditing) {
+        console.log(`Calling updatePromptOnServer for ID: ${editingPromptId}`);
+        savePromise = updatePromptOnServer(editingPromptId, { title, content, tag }); // We'll define this new function
     } else {
-        alert(result.message || 'Failed to save prompt.');
-        saveButton.disabled = false;
-        saveButton.innerHTML = originalButtonHTML;
+        console.log("Calling addPromptToServer for new prompt");
+        savePromise = addPromptToServer(title, content, tag); // Your existing function
     }
+
+    // --- Handle the result of the save/update operation ---
+    savePromise.then(result => {
+        if (result.success) {
+            // --- Success ---
+            // Clear inputs
+            titleInput.value = '';
+            contentInput.value = '';
+            tagInput.value = '';
+
+            // Show success message on button
+            const successText = isEditing ? "Updated!" : "Saved!";
+            saveButton.innerHTML = `
+                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                ${successText}
+            `;
+
+            // Reset UI and state after delay
+            setTimeout(() => {
+                // Hide the save/edit form section
+                savePromptSection.classList.add('hidden');
+                // Clear editing state
+                savePromptSection.removeAttribute('data-editing-prompt-id');
+                // Restore original button state
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalButtonHTML; // Restore original text/icon
+
+                // Optional: Scroll list to top to show new/updated item
+                const listContainer = document.getElementById('prompt-list-container');
+                if (listContainer && !isEditing) { // Only scroll for new items if desired
+                    listContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }, 1500);
+
+        } else {
+            // --- Failure ---
+            console.error("Prompt save/update failed:", result.message);
+            alert(result.message || `Failed to ${isEditing ? 'update' : 'save'} prompt.`);
+            // Restore button state
+            saveButton.disabled = false;
+            // Restore original button text/icon based on mode
+            if (isEditing) {
+                 saveButton.innerHTML = `
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Update Prompt
+                `;
+            } else {
+                saveButton.innerHTML = originalButtonHTML; // Restore original "Save Prompt" text
+            }
+        }
+    }).catch(error => {
+        // --- Unexpected Error ---
+        console.error("Unexpected error in confirmSavePrompt:", error);
+        alert("An unexpected error occurred. Please try again.");
+        saveButton.disabled = false;
+        // Restore original button text/icon based on mode
+        if (isEditing) {
+             saveButton.innerHTML = `
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Update Prompt
+            `;
+        } else {
+            saveButton.innerHTML = originalButtonHTML;
+        }
+        // Clear editing state on error too
+        savePromptSection.removeAttribute('data-editing-prompt-id');
+    });
 }
 // --- End Revised confirmSavePrompt ---
 
@@ -1269,7 +1531,8 @@ function handleCredentialResponse(response) {
     hideError();
     const responsePayload = parseJwt(response.credential);
     if (responsePayload) {
-        console.log("Google ID Token for backend testing:", response.credential);
+        currentUserToken = response.credential; // Store the raw token string
+        console.log("User logged in. Token stored for API calls.");
         const userData = {
             name: responsePayload.name,
             picture: responsePayload.picture,
@@ -1278,6 +1541,7 @@ function handleCredentialResponse(response) {
         storeUserData(userData);
         showRouterScreen(userData);
         checkForNewPatchNotes(); // Check after login
+        loadPromptsFromServer();
     } else {
         showError("Failed to process login credentials.");
     }
@@ -1492,7 +1756,7 @@ function setupBubbleInteractions() {
 // Initialize the app
 function initializeApp() {
     initializeDarkMode();
-    loadSavedPrompts(); // --- NEW: Load prompts on startup ---
+    //loadSavedPrompts(); // --- NEW: Load prompts on startup ---
     try {
         const userData = localStorage.getItem('user');
         if (userData) {
@@ -1583,4 +1847,3 @@ window.addDashboardTab = addDashboardTab;
 window.removeDashboardTab = removeDashboardTab;
 window.switchDashboardTab = switchDashboardTab;
 window.closeModal = closeModal;
-
