@@ -1269,6 +1269,7 @@ function handleCredentialResponse(response) {
     hideError();
     const responsePayload = parseJwt(response.credential);
     if (responsePayload) {
+        console.log("Google ID Token for backend testing:", response.credential);
         const userData = {
             name: responsePayload.name,
             picture: responsePayload.picture,
@@ -1582,3 +1583,4 @@ window.addDashboardTab = addDashboardTab;
 window.removeDashboardTab = removeDashboardTab;
 window.switchDashboardTab = switchDashboardTab;
 window.closeModal = closeModal;
+
