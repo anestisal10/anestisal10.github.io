@@ -4,6 +4,18 @@ let dashboardTabs = [];
 let isPatchNotesPanelOpen = false;
 let lastSeenPatchNoteId = parseInt(localStorage.getItem('lastSeenPatchNoteId')) || 0;
 
+const bubbleGradients = {
+    'green': 'linear-gradient(135deg, #10b981 0%, #059669 100%)', // Emerald 500 -> 600
+    'blue': 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',  // Blue 500 -> 700
+    'orange': 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)', // Orange 500 -> 700
+    'purple': 'linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)', // Purple 500 -> 700
+    'indigo': 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)', // Indigo 500 -> 700
+    'gray': 'linear-gradient(135deg, #6b7280 0%, #374151 100%)',   // Gray 500 -> 600
+    'teal': 'linear-gradient(135deg, #0d9488 0%, #115e59 100%)',   // Teal 600 -> 800
+    'pink': 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',   // Pink 500 -> 700
+    // Add more if needed
+};
+
 // Initialize dark mode
 function initializeDarkMode() {
     if (isDarkMode) {
@@ -122,149 +134,89 @@ function renderPatchNotes() {
 }
 
 // Create model card (Updated to use info_url for Learn More)
-// --- Updated createModelCard with an extra glassmorphic bubble --- //
-// createModelCard.js — polished, glass-bubble buttons
+// --- Simplified createModelCard function for standard grid ---
 function createModelCard(model, index) {
-    /* ---------- 1. Color & gradient mapping ---------- */
-    const gradientMap = {
-      green:  'from-green-400/40  via-emerald-500/40  to-green-600/55',
-      blue:   'from-blue-400/40   via-cyan-500/40    to-blue-600/55',
-      orange: 'from-orange-400/40 via-amber-500/40   to-orange-600/55',
-      purple: 'from-purple-400/40 via-fuchsia-500/40 to-purple-600/55',
-      indigo: 'from-indigo-400/40 via-violet-500/40 to-indigo-600/55',
-      gray:   'from-gray-400/40   via-zinc-500/40    to-gray-600/75',
-      teal:   'from-teal-400/40   via-sky-500/40     to-teal-600/55',
-      pink:   'from-pink-400/40   via-rose-500/40    to-pink-600/55'
-    };
-    const gradientClasses = gradientMap[model.color] || gradientMap.gray;
-  
-    /* ---------- 2. Random scattering (unchanged) ---------- */
-    const maxXOffset = 45, maxYOffset = 45;
-    const seededRandom = a => {
-      let t = a + 1;
-      for (let i = 0; i < 5; i++) {
-        t = Math.sin(t) * 1000;
-        t -= Math.floor(t);
-      }
-      return t;
-    };
-    const randX  = seededRandom(index * 1.3)  * 2 - 1;
-    const randY  = seededRandom(index * 0.7 + 80) * 1.5 - 1;
-    const translateX = randX * maxXOffset;
-    const translateY = randY * maxYOffset;
-    const transformStyle = `transform: translate(${translateX}px, ${translateY}px);`;
-  
-    /* ---------- 3. Bubble gradient (for the glass orb) ---------- */
-    const bubbleGradient = {
-      green:'rgba(34,197,94,.12),rgba(16,185,129,.22),transparent',
-      blue:'rgba(59,130,246,.12),rgba(6,182,212,.22),transparent',
-      orange:'rgba(251,146,60,.12),rgba(245,158,11,.22),transparent',
-      purple:'rgba(168,85,247,.12),rgba(217,70,239,.22),transparent',
-      indigo:'rgba(99,102,241,.12),rgba(139,92,246,.22),transparent',
-      gray:'rgba(156,163,175,.12),rgba(113,113,122,.22),transparent',
-      teal:'rgba(20,184,166,.12),rgba(14,165,233,.22),transparent',
-      pink:'rgba(236,72,153,.12),rgba(225,29,72,.22),transparent'
-    };
-    const g = bubbleGradient[model.color] || bubbleGradient.gray;
-  
-    /* ---------- 4. Mark-up ---------- */
+    // Determine bubble size (you can keep the cycling logic or use a fixed size)
+    const sizeSequence = [
+        'size-medium', 'size-small', 'size-large',
+        'size-small', 'size-large', 'size-medium',
+        'size-large', 'size-small',
+        // Add more if you have more models, or it will cycle
+    ];
+
+    // Determine bubble size based on the predefined sequence
+    // If more models than sequence items, cycle through the sequence
+    let sizeClass;
+    if (index < sizeSequence.length) {
+        sizeClass = sizeSequence[index];
+    } else {
+        // Fallback: cycle through the last few sizes or a default pattern
+        // Example: Cycle the last 3 items of the sequence
+        const cycleLength = Math.min(3, sizeSequence.length);
+        const startIndex = sizeSequence.length - cycleLength;
+        const cycleIndex = (index - sizeSequence.length) % cycleLength;
+        sizeClass = sizeSequence[startIndex + cycleIndex];
+        // Or, simpler fallback: just cycle the original sizes
+        // const fallbackSizes = ['size-large', 'size-medium', 'size-small'];
+        // sizeClass = fallbackSizes[index % fallbackSizes.length];
+    }
+
+    // Get the appropriate gradient
+    const gradient = bubbleGradients[model.color] || bubbleGradients['gray'];
+
     return `
-      <div class="flex flex-col items-center" style="${transformStyle}">
-        <!-- Card wrapper -->
-        <div class="model-card group relative cursor-pointer
-                    transition-all duration-300 ease-out hover:-translate-y-1"
-             data-model-id="${model.id}"
-             onmouseenter="showTooltip(event,'${model.id}')"
-             onmouseleave="hideTooltip()">
-  
-          <!-- Extra glass bubble (orb) -->
-          <span class="absolute inset-0 -z-10 w-44 h-44 m-auto rounded-full
-                       backdrop-blur-[20px] border border-white/10
-                       bg-[radial-gradient(circle_at_50%_40%,${g})]
-                       animate-[drift_12s_ease-in-out_infinite_alternate]">
-          </span>
-  
-          <!-- Glow ring -->
-          <div class="absolute inset-3 bg-gradient-to-r ${{
-            green:'from-green-400/20 to-emerald-500/20',
-            blue:'from-blue-400/30 to-cyan-500/30',
-            orange:'from-orange-400/30 to-amber-500/30',
-            purple:'from-purple-400/30 to-fuchsia-500/30',
-            indigo:'from-indigo-400/30 to-violet-500/30',
-            gray:'from-gray-400/30 to-zinc-500/30',
-            teal:'from-teal-400/30 to-sky-500/30',
-            pink:'from-pink-400/30 to-rose-500/30'
-          }[model.color] || 'from-gray-400/20 to-gray-500/20'}
-                       rounded-full blur-2xl opacity-60 group-hover:opacity-80
-                       transition-opacity duration-500">
-          </div>
-  
-          <!-- Main button -->
-          <div class="relative w-32 h-32 flex flex-col items-center justify-center
-                      bg-gradient-to-br ${gradientClasses} text-white
-                      rounded-full shadow-[0_8px_24px_rgba(0,0,0,.25),inset_0_1px_0_rgba(255,255,255,.15)]
-                      border border-white/20
-                      group-hover:shadow-[0_12px_32px_rgba(0,0,0,.35),inset_0_1px_0_rgba(255,255,255,.25)]
-                      group-hover:scale-[1.05]
-                      transition-all duration-300 ease-out">
-            <div class="bg-white/10 rounded-full p-2 mb-1 backdrop-blur-[1px]">
-              <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="${model.icon}"/>
-              </svg>
+        <div class="model-bubble-wrapper" data-model-id="${model.id}">
+            <!-- Bubbly Model Card -->
+            <div class="model-bubble ${sizeClass}"
+                 style="--bubble-gradient: ${gradient};" 
+                 data-model-id="${model.id}"
+                 onmouseenter="showTooltip(event, '${model.id}')"
+                 onmouseleave="hideTooltip()">
+                
+                <!-- Content (Icon and Text) -->
+                <div class="bubble-content">
+                    <!-- Icon -->
+                    <div class="mb-2 flex justify-center"> 
+                        <svg class="w-8 h-8 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="${model.icon}"/>
+                        </svg>
+                    </div>
+                    <!-- Model Name -->
+                    <div class="model-name">${model.name}</div>
+                    <!-- Model Description/Company -->
+                    <div class="model-description">${model.company}</div>
+                </div>
             </div>
-            <span class="font-sans text-sm font-semibold tracking-tight
-                         drop-shadow-[0_1px_2px_rgba(0,0,0,.4)]">
-              ${model.name}
-            </span>
-          </div>
+
+            <!-- External Learn More Button (Optional, below bubble) -->
+            <button onclick="openModel('${model.info_url}')" class="mt-3 px-3 py-1 text-xs bg-white/10 hover:bg-white/20 text-white rounded-lg transition duration-200 flex items-center border border-white/10 backdrop-blur-sm z-10">
+                <svg class="w-3 h-3 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+                <span class="truncate">Learn More</span>
+            </button>
         </div>
-  
-        <!-- Learn-more link -->
-        <button onclick="openModel('${model.info_url}')"
-                class="mt-4 px-3 py-1 text-xs
-                       bg-brand-red-500/20 hover:bg-brand-red-500/30
-                       dark:bg-brand-red-900/20 dark:hover:bg-brand-red-800/30
-                       text-brand-red-700 dark:text-brand-red-300
-                       rounded-lg flex items-center space-x-1
-                       border border-brand-red-500/30 dark:border-brand-red-700/30
-                       transition-all duration-200 ease-out
-                       hover:scale-105 active:scale-95">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-          </svg>
-          <span>Learn More</span>
-        </button>
-      </div>
     `;
-  }
+}
+// --- End Simplified createModelCard ---
 
 // --- New Function: Draw Network Lines ---
 // --- Revised Function: Draw Network Lines (v4 - With Debugging) ---
+// --- Revised drawNetworkLines function for standard grid ---
 function drawNetworkLines() {
-    console.log("--- drawNetworkLines started ---");
     const svgContainer = document.getElementById('network-lines');
-    const svg = svgContainer.querySelector('svg');
-
-    // --- Debugging: Check if container exists and has size ---
-    if (!svgContainer) {
-        console.error("Error: #network-lines container not found!");
+    const svg = svgContainer?.querySelector('svg');
+    
+    if (!svgContainer || !svg) {
+        console.warn("Network lines SVG container or SVG not found.");
         return;
     }
-    const containerRect = svgContainer.getBoundingClientRect();
-    console.log("Container Rect:", containerRect);
-    if (containerRect.width === 0 || containerRect.height === 0) {
-        console.warn("Warning: #network-lines container has zero width or height. Retrying in 100ms...");
-        // Retry once after a short delay if container is not sized yet
-        setTimeout(drawNetworkLines, 100);
-        return;
-    }
-    // --- End Debugging ---
 
     // Clear any existing lines
     svg.innerHTML = '';
 
     // --- Crucial: Set SVG viewBox and size to match its container ---
+    const containerRect = svgContainer.getBoundingClientRect();
     svg.setAttribute('width', containerRect.width);
     svg.setAttribute('height', containerRect.height);
     svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
@@ -272,67 +224,90 @@ function drawNetworkLines() {
     svg.style.top = '0';
     svg.style.left = '0';
 
-    // Get all model card *buttons* (the round bubbles)
-    const modelButtons = document.querySelectorAll('.model-card > .relative');
-
-    // --- Debugging: Check if model buttons are found ---
-    console.log("Found model buttons:", modelButtons.length);
-    if (modelButtons.length < 2) {
-        console.warn("Not enough model buttons found to draw lines (need at least 2).");
+    // Get all model bubbles
+    const modelBubbles = document.querySelectorAll('.model-bubble');
+    
+    if (modelBubbles.length < 2) {
+        console.log("Not enough bubbles to draw lines.");
         return;
     }
-    // --- End Debugging ---
 
-    // --- Store positions and elements ---
+    // --- Store positions by measuring rendered elements ---
     const nodes = [];
 
-    modelButtons.forEach((button, index) => { // Added index for logging
-        const rect = button.getBoundingClientRect();
+    modelBubbles.forEach(bubble => {
+        const rect = bubble.getBoundingClientRect();
+        // Calculate center relative to the SVG container's top-left
         const centerX = rect.left + rect.width / 2 - containerRect.left;
         const centerY = rect.top + rect.height / 2 - containerRect.top;
-        nodes.push({ element: button, cx: centerX, cy: centerY });
-        // --- Debugging: Log individual node positions ---
-        console.log(`Node ${index} center: (${centerX.toFixed(2)}, ${centerY.toFixed(2)})`);
-        // --- End Debugging ---
+        nodes.push({ element: bubble, cx: centerX, cy: centerY, id: bubble.dataset.modelId });
     });
 
-    // --- Connect nodes based on proximity (simple horizontal/vertical check) ---
-    const threshold = Math.min(containerRect.width, containerRect.height) * 0.3; // 30% of smaller dimension
-    console.log("Connection threshold:", threshold.toFixed(2));
+    // --- Connect nodes based on grid adjacency ---
+    // We need to figure out the grid structure.
+    // A simple way: connect nodes that are close horizontally or vertically.
+    
+    // 1. Sort nodes by Y then X to guess row/column order (helps if CSS grid is regular)
+    nodes.sort((a, b) => {
+        if (Math.abs(a.cy - b.cy) < 30) { // If Y coords are close (within 30px), sort by X
+            return a.cx - b.cx;
+        }
+        return a.cy - b.cy; // Otherwise, sort by Y
+    });
 
-    let linesDrawn = 0;
+    // 2. Determine approximate grid dimensions
+    const uniqueYs = [...new Set(nodes.map(n => Math.round(n.cy)))].sort((a, b) => a - b);
+    const uniqueXs = [...new Set(nodes.map(n => Math.round(n.cx)))].sort((a, b) => a - b);
+    const numRows = uniqueYs.length;
+    const numCols = uniqueXs.length;
+    
+    console.log(`Estimated Grid: ${numRows} rows, ${numCols} cols`);
+
+    // 3. Connect adjacent nodes (simplistic grid connection)
+    // Find horizontal and vertical neighbors based on sorted order and proximity
     for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
             const nodeA = nodes[i];
             const nodeB = nodes[j];
-
-            // Calculate distance
+            
             const dx = Math.abs(nodeA.cx - nodeB.cx);
             const dy = Math.abs(nodeA.cy - nodeB.cy);
 
-            // Connect if they are close enough horizontally OR vertically
-            if (dx < threshold || dy < threshold) { // Simplified connection logic
-                console.log(`Connecting node ${i} to node ${j}`); // Debug log
+            // Connect if:
+            // 1. They are on the same row (Y close) and adjacent columns (X gap is reasonable)
+            // 2. They are in the same column (X close) and adjacent rows (Y gap is reasonable)
+            
+            // Estimate average horizontal/vertical spacing
+            const avgHSpacing = numCols > 1 ? (Math.max(...uniqueXs) - Math.min(...uniqueXs)) / (numCols - 1) : 100;
+            const avgVSpacing = numRows > 1 ? (Math.max(...uniqueYs) - Math.min(...uniqueYs)) / (numRows - 1) : 100;
+            
+            const hThreshold = avgHSpacing * 1.2; // Allow for some variation
+            const vThreshold = avgVSpacing * 1.2;
+
+            if ((Math.abs(dy) < 20 && dx < hThreshold && dx > 10) || // Horizontal neighbor
+                (Math.abs(dx) < 20 && dy < vThreshold && dy > 10)) {  // Vertical neighbor
+                 
+                console.log(`Connecting node ${i} (${nodeA.id}) to node ${j} (${nodeB.id})`);
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', nodeA.cx);
                 line.setAttribute('y1', nodeA.cy);
                 line.setAttribute('x2', nodeB.cx);
                 line.setAttribute('y2', nodeB.cy);
-
-                // --- Make lines clearly visible for testing ---
-                line.setAttribute('stroke', '#ffffff'); // RED for high visibility
+                
+                // --- Style lines ---
+                line.setAttribute('stroke', '#ffffff');
                 line.setAttribute('stroke-width', '1');
-                line.setAttribute('stroke-opacity', '0.4');
-                line.setAttribute('stroke-dasharray', '2,4'); // Dash pattern
-
+                line.setAttribute('stroke-opacity', '0.3'); // Subtle
+                // line.setAttribute('stroke-dasharray', '2,4'); // Optional: dashed
+                
                 svg.appendChild(line);
-                linesDrawn++;
             }
         }
     }
 
-    console.log(`--- drawNetworkLines finished. Lines drawn: ${linesDrawn} ---`);
+    console.log("Network lines drawn for", nodes.length, "nodes in grid layout");
 }
+// --- End Revised drawNetworkLines ---
 
 // Show tooltip (Reverted to original content)
 function showTooltip(event, modelId) {
@@ -394,11 +369,16 @@ function hideTooltip() {
 // Render models grid
 function renderModelsGrid() {
     const grid = document.getElementById('models-grid');
-    grid.innerHTML = models.map((model,index) => createModelCard(model, index)).join('');
-    // Add click handlers for model cards (opening the model)
-    grid.addEventListener('click', handleModelClick);
-    console.log("Scheduling drawNetworkLines...");
-    requestAnimationFrame(drawNetworkLines);
+    if (!grid) return; // Safety check
+
+    // Populate grid HTML
+    grid.innerHTML = models.map((model, index) => createModelCard(model, index)).join('');
+
+    // --- Apply Scattering and Interactions after elements are in the DOM ---
+    requestAnimationFrame(() => {
+        setupBubbleInteractions(); // Setup mousemove and click effects
+        //drawNetworkLines(); // Draw lines after bubbles are positioned
+    });
 }
 
 // Handle model click (Updated to prevent default and stop propagation)
@@ -670,6 +650,155 @@ function showError(message = "Login failed. Please try again.") {
 function hideError() {
     document.getElementById('login-error').classList.add('hidden');
 }
+
+
+// Setup mouse move parallax and click ripple effects
+function setupBubbleInteractions() {
+    const container = document.getElementById('models-grid');
+    if (!container) return;
+
+    // Mouse Move Parallax
+    container.addEventListener('mousemove', (e) => {
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+
+        const bubbles = container.querySelectorAll('.model-bubble');
+        bubbles.forEach(bubble => {
+            const rect = bubble.getBoundingClientRect();
+            const bubbleCenterX = rect.left + rect.width / 2;
+            const bubbleCenterY = rect.top + rect.height / 2;
+
+            const deltaX = mouseX - bubbleCenterX;
+            const deltaY = mouseY - bubbleCenterY;
+
+            // Determine intensity based on size
+            let intensity = 0.02;
+            if (bubble.classList.contains('size-large')) intensity = 0.03;
+            if (bubble.classList.contains('size-small')) intensity = 0.015;
+
+            const moveX = deltaX * intensity;
+            const moveY = deltaY * intensity;
+
+            // Get current transform (if any) and apply additional translate
+            // This is a simplified approach, might conflict with scattering transform on wrapper
+            // Better to apply to the wrapper or use a more complex transform string parser
+            // For now, let's just apply it directly, assuming scattering is done on wrapper
+            bubble.style.transform = `translate(${moveX}px, ${moveY}px) scale(${bubble.classList.contains('size-large') ? 1 : bubble.classList.contains('size-small') ? 1 : 1})`; // Keep scale consistent or adjust
+            // Note: This simple replacement might override the absolute positioning.
+            // A better way is to calculate the combined transform.
+            // Let's refine this:
+            const currentTransform = bubble.style.transform || 'translate(0px, 0px)'; // Default if none
+            // Extract translate if it exists, or just append
+            // This is complex; let's simplify by applying parallax to the wrapper instead.
+            // However, the wrapper already has scattering. Let's apply parallax relative to its scattered position.
+            
+            // Simpler: Just apply a small translate on top of existing absolute positioning
+            // The bubble is absolutely positioned, so translate moves it relative to that position.
+            // We need to get the wrapper's position to calculate correctly.
+            const wrapper = bubble.parentElement;
+            if (wrapper) {
+                 const wrapperRect = wrapper.getBoundingClientRect();
+                 const wrapperCenterX = wrapperRect.left + wrapperRect.width / 2;
+                 const wrapperCenterY = wrapperRect.top + wrapperRect.height / 2;
+                 const deltaWrapperX = mouseX - wrapperCenterX;
+                 const deltaWrapperY = mouseY - wrapperCenterY;
+                 const moveWrapperX = deltaWrapperX * intensity * 0.5; // Weaker effect on wrapper
+                 const moveWrapperY = deltaWrapperY * intensity * 0.5;
+                 // Apply to wrapper's transform (which holds the scattering)
+                 const scatterTransform = wrapper.style.transform || '';
+                 // This is getting complex to manage two transforms.
+                 // Let's stick to applying it to the bubble itself, assuming it's the primary visual element.
+                 // The risk is it might conflict with absolute positioning if not careful.
+                 // Let's assume absolute positioning is set by left/top (it's not here, it's centered by flex in wrapper)
+                 // So, translate should work relatively fine.
+                 bubble.style.transform = `translate(${moveX}px, ${moveY}px)`; 
+                 // Re-apply scale if needed from hover
+                 if (bubble.matches(':hover')) {
+                     bubble.style.transform += ' scale(1.08)';
+                 } else {
+                     // Check base scale class if needed, but float animation handles base transform
+                     // Let's rely on the CSS animation for base float and just add mouse move offset
+                     // The CSS `animation` property will conflict with `style.transform`.
+                     // We need to use a different approach or disable the CSS animation on mousemove.
+                 }
+            }
+            
+        });
+    });
+
+    // Reset parallax on mouse leave
+    container.addEventListener('mouseleave', () => {
+        const bubbles = container.querySelectorAll('.model-bubble');
+        bubbles.forEach(bubble => {
+            // Reset inline transform style to allow CSS animation to take over
+            bubble.style.transform = '';
+        });
+    });
+
+    // Click Ripple Effect
+    container.addEventListener('click', (e) => {
+        // Check if a bubble was clicked
+        const bubble = e.target.closest('.model-bubble');
+        if (bubble) {
+            // 1. Handle the click action (open model)
+            const modelId = bubble.dataset.modelId;
+            const model = models.find(m => m.id === modelId);
+            if (model) {
+                 e.preventDefault();
+                 e.stopPropagation();
+                 openModel(model.url); // Or info_url if that's preferred
+            }
+
+            // 2. Create and animate the ripple
+            const ripple = document.createElement('div');
+            ripple.classList.add('ripple');
+            // Style the ripple
+            Object.assign(ripple.style, {
+                position: 'absolute',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.3)',
+                transform: 'scale(0)',
+                animation: 'ripple 0.6s linear forwards', // Use forwards to keep final state
+                left: '50%',
+                top: '50%',
+                width: '0',
+                height: '0',
+                marginLeft: '0',
+                marginTop: '0',
+                pointerEvents: 'none',
+                zIndex: '3' // Above content
+            });
+            
+            bubble.appendChild(ripple);
+
+            // Remove ripple element after animation
+            ripple.addEventListener('animationend', () => {
+                ripple.remove();
+            });
+        }
+    });
+    
+    // Ensure the ripple animation is defined in the document
+    if (!document.querySelector('#ripple-animation-style')) {
+        const style = document.createElement('style');
+        style.id = 'ripple-animation-style';
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: translate(-50%, -50%) scale(4); /* Scale relative to center */
+                    opacity: 0;
+                }
+            }
+            .ripple {
+                /* Ensure the animation is applied correctly */
+                 transform-origin: center; /* Explicit origin */
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// --- End New Functions ---
 
 // Initialize the app
 function initializeApp() {
