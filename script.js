@@ -6,6 +6,7 @@ let lastSeenPatchNoteId = parseInt(localStorage.getItem('lastSeenPatchNoteId')) 
 let savedPrompts = [];
 const PROMPT_STORAGE_KEY = 'llmRouterPrompts';
 let currentUserToken = null;
+let tokenExpiry = null;
 
 const bubbleGradients = {
     'green': 'linear-gradient(135deg, #10b981 0%, #059669 100%)', // Emerald 500 -> 600
@@ -31,6 +32,11 @@ function toggleDarkMode() {
     isDarkMode = !isDarkMode;
     localStorage.setItem('darkMode', isDarkMode.toString());
     document.documentElement.classList.toggle('dark', isDarkMode);
+}
+
+function isTokenValid() {
+    if (!currentUserToken || !tokenExpiry) return false;
+    return Date.now() < tokenExpiry;
 }
 
 function generateSimpleUUID() {
@@ -329,241 +335,206 @@ function editPrompt(promptId) {
     showEditPromptModal(prompt);
 }
 
+function handleTokenExpiry() {
+    currentUserToken = null;
+    tokenExpiry = null;
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('tokenExpiry');
+    
+    // Show re-authentication UI
+    showAuthenticationRequired();
+}
+
 // Helper function to get headers with Authorization
 function getAuthHeaders() {
-    if (!currentUserToken) {
-        console.warn("No user token available for API request.");
-        // Depending on your desired behavior, you might throw an error or return basic headers
-        // For now, let's return basic headers and let the API respond with 401
-        // A better UI would disable prompt features if not logged in properly
-        return {
-            'Content-Type': 'application/json'
-            // 'Authorization': `Bearer ${currentUserToken}` // Omitted if no token
-        };
+    if (!isTokenValid()) {
+        console.warn("Token is invalid or expired");
+        // Optionally trigger re-authentication
+        handleTokenExpiry();
+        throw new Error('Authentication required');
     }
+    
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentUserToken}`
     };
 }
 
+function showAuthenticationRequired() {
+    const message = document.createElement('div');
+    message.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-lg z-50';
+    message.innerHTML = `
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+            Session expired. Please <button onclick="triggerReauth()" class="underline font-semibold">log in again</button>
+        </div>
+    `;
+    document.body.appendChild(message);
+    
+    setTimeout(() => {
+        if (document.body.contains(message)) {
+            document.body.removeChild(message);
+        }
+    }, 10000);
+}
+
 // Load prompts from the backend server
 async function loadPromptsFromServer() {
-    if (!currentUserToken) {
-        console.log("Not logged in, cannot load prompts from server.");
-        // Optionally, clear the local list
-        // savedPrompts = [];
-        // renderPromptLibrary();
+    if (!isTokenValid()) {
+        console.log("Not authenticated, cannot load prompts");
+        savedPrompts = [];
+        renderPromptLibrary();
         return;
     }
 
-    const url = 'http://127.0.0.1:8000/api/prompts'; // Adjust URL if hosted elsewhere
-    const headers = getAuthHeaders();
-
     try {
-        console.log("Fetching prompts from server...");
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: headers
-        });
-
-        if (!response.ok) {
-            if (response.status === 401) {
-                 console.error("Unauthorized: Token might be invalid or expired when loading prompts.");
-                 alert("Session expired or invalid. Please log out and log back in.");
-                 // Optionally trigger logout
-                 // handleSignOut();
-                 return;
-            }
-            throw new Error(`HTTP error! Status: ${response.status}`);
+        console.log("Loading prompts from server...");
+        const promptsData = await apiRequest(API_CONFIG.endpoints.prompts);
+        
+        if (Array.isArray(promptsData)) {
+            savedPrompts = promptsData;
+            renderPromptLibrary();
+            console.log(`Loaded ${promptsData.length} prompts from server`);
+        } else {
+            throw new Error('Invalid response format');
         }
 
-        const promptsData = await response.json();
-        console.log("Prompts loaded from server:", promptsData);
-        savedPrompts = promptsData; // Update the local array
-        renderPromptLibrary(); // Refresh the UI
-
     } catch (error) {
-        console.error("Error loading prompts from server:", error);
-        alert("Failed to load prompts from the server. Please try again later.");
-        // Optionally, fall back to local storage if it existed before?
-        // loadSavedPrompts(); // This would be your old localStorage function
+        console.error("Error loading prompts:", error);
+        
+        if (error.message === 'Authentication required') {
+            // Don't show error alert for auth issues, handled by handleTokenExpiry
+            return;
+        }
+        
+        // Show user-friendly error
+        showNotification('Failed to load prompts. Using offline mode.', 'warning');
+        
+        // Fallback to local storage if available
+        loadSavedPrompts();
     }
 }
 
 // Add a new prompt to the backend server
 async function addPromptToServer(title, content, tag = '') {
-    if (!currentUserToken) {
-        alert("You need to be logged in to save prompts.");
-        return { success: false, message: 'Not logged in.' };
+    if (!isTokenValid()) {
+        showNotification('You need to be logged in to save prompts.', 'error');
+        return { success: false, message: 'Authentication required.' };
     }
 
     if (!title.trim() || !content.trim()) {
-        alert('Title and content are required to save a prompt.');
+        showNotification('Title and content are required.', 'error');
         return { success: false, message: 'Title and content are required.' };
     }
 
-    const url = 'http://127.0.0.1:8000/api/prompts'; // Adjust URL if hosted elsewhere
-    const headers = getAuthHeaders();
-    const promptData = {
-        title: title.trim(),
-        content: content.trim(),
-        tag: tag.trim()
-    };
-
     try {
+        const promptData = {
+            title: title.trim(),
+            content: content.trim(),
+            tag: tag.trim()
+        };
+
         console.log("Saving prompt to server:", promptData);
-        const response = await fetch(url, {
+        const newPrompt = await apiRequest(API_CONFIG.endpoints.prompts, {
             method: 'POST',
-            headers: headers,
             body: JSON.stringify(promptData)
         });
 
-        if (!response.ok) {
-            if (response.status === 401) {
-                 console.error("Unauthorized: Token might be invalid or expired when saving prompt.");
-                 alert("Session expired or invalid. Please log out and log back in.");
-                 // Optionally trigger logout
-                 // handleSignOut();
-                 return { success: false, message: 'Unauthorized. Please log in again.' };
-            }
-            const errorText = await response.text();
-            console.error("Server error response:", errorText);
-            throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorText}`);
-        }
-
-        const newPrompt = await response.json();
-        console.log("Prompt saved to server:", newPrompt);
-        // Add the newly created prompt (with server-assigned ID) to the local list
+        // Add to local array
         savedPrompts.unshift(newPrompt);
-        renderPromptLibrary(); // Refresh the UI
-        return { success: true, message: 'Prompt saved successfully!', prompt: newPrompt };
+        renderPromptLibrary();
+        
+        return { 
+            success: true, 
+            message: 'Prompt saved successfully!', 
+            prompt: newPrompt 
+        };
 
     } catch (error) {
-        console.error("Error saving prompt to server:", error);
-        alert("Failed to save prompt to the server. Please try again later.");
+        console.error("Error saving prompt:", error);
+        
+        if (error.message === 'Authentication required') {
+            return { success: false, message: 'Please log in again.' };
+        }
+        
+        showNotification('Failed to save prompt. Please try again.', 'error');
         return { success: false, message: 'Failed to save prompt.' };
     }
 }
 
 // Delete a prompt from the backend server
 async function deletePromptFromServer(promptId) {
-    if (!currentUserToken) {
-        alert("You need to be logged in to delete prompts.");
+    if (!isTokenValid()) {
+        showNotification('You need to be logged in to delete prompts.', 'error');
         return;
     }
 
-    // Confirm deletion (you can use your existing showCustomConfirmDialog if preferred)
     if (!confirm('Are you sure you want to delete this prompt?')) {
-        return; // User cancelled
+        return;
     }
 
-    const url = `http://127.0.0.1:8000/api/prompts/${promptId}`; // Adjust URL if hosted elsewhere
-    const headers = getAuthHeaders();
-
     try {
-        console.log(`Deleting prompt ${promptId} from server...`);
-        const response = await fetch(url, {
-            method: 'DELETE',
-            headers: headers
-            // No body needed for DELETE
+        console.log(`Deleting prompt ${promptId}...`);
+        await apiRequest(`${API_CONFIG.endpoints.prompts}/${promptId}`, {
+            method: 'DELETE'
         });
 
-        if (!response.ok) {
-             if (response.status === 401) {
-                 console.error("Unauthorized: Token might be invalid or expired when deleting prompt.");
-                 alert("Session expired or invalid. Please log out and log back in.");
-                 // Optionally trigger logout
-                 // handleSignOut();
-                 return;
-             }
-             if (response.status === 404) {
-                 console.warn(`Prompt ${promptId} not found on server.`);
-                 // Still remove it locally if it exists?
-             }
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        // Server responded with 204 No Content (or 200 OK), deletion successful
-        console.log(`Prompt ${promptId} deleted from server.`);
-        // Remove the prompt from the local list
+        // Remove from local array
         savedPrompts = savedPrompts.filter(prompt => prompt.id !== promptId);
-        renderPromptLibrary(); // Refresh the UI
+        renderPromptLibrary();
+        
+        showNotification('Prompt deleted successfully!', 'success');
 
     } catch (error) {
-        console.error("Error deleting prompt from server:", error);
-        alert("Failed to delete prompt from the server. Please try again later.");
-        // Optionally, retry or keep it in the list?
+        console.error("Error deleting prompt:", error);
+        
+        if (error.message === 'Authentication required') {
+            return;
+        }
+        
+        showNotification('Failed to delete prompt. Please try again.', 'error');
     }
 }
 
 // --- NEW: API Function to Update a Prompt on the Server ---
 async function updatePromptOnServer(promptId, updateData) {
-    if (!currentUserToken) {
-        alert("You need to be logged in to update prompts.");
-        return { success: false, message: 'Not logged in.' };
+    if (!isTokenValid()) {
+        return { success: false, message: 'Authentication required.' };
     }
 
-    if (!promptId) {
-        console.error("updatePromptOnServer called without a promptId");
-        return { success: false, message: 'Prompt ID is required for update.' };
-    }
-
-    // Basic validation of updateData
     if (!updateData.title?.trim() || !updateData.content?.trim()) {
-         alert('Title and content are required.');
-         return { success: false, message: 'Title and content are required.' };
+        return { success: false, message: 'Title and content are required.' };
     }
-
-    const url = `http://127.0.0.1:8000/api/prompts/${encodeURIComponent(promptId)}`;
-    const headers = getAuthHeaders(); // Your existing function
 
     try {
-        console.log(`Updating prompt ${promptId} on server:`, updateData);
-        const response = await fetch(url, {
+        console.log(`Updating prompt ${promptId}...`);
+        const updatedPrompt = await apiRequest(`${API_CONFIG.endpoints.prompts}/${promptId}`, {
             method: 'PUT',
-            headers: headers,
             body: JSON.stringify(updateData)
         });
 
-        if (!response.ok) {
-            if (response.status === 401) {
-                console.error("Unauthorized: Token might be invalid/expired when updating prompt.");
-                alert("Session expired or invalid. Please log out and log back in.");
-                return { success: false, message: 'Unauthorized. Please log in again.' };
-            }
-            if (response.status === 404) {
-                 console.warn(`Prompt ${promptId} not found on server for update.`);
-                 alert("Prompt not found on server. It might have been deleted.");
-                 // Optionally remove it locally?
-                 savedPrompts = savedPrompts.filter(p => p.id !== promptId);
-                 renderPromptLibrary();
-                 return { success: false, message: 'Prompt not found.' };
-            }
-            const errorText = await response.text();
-            console.error(`Server error (${response.status}) updating prompt:`, errorText);
-            throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorText}`);
-        }
-
-        const updatedPrompt = await response.json();
-        console.log("Prompt updated on server:", updatedPrompt);
-
-        // Update the prompt in the local list
+        // Update in local array
         const index = savedPrompts.findIndex(p => p.id === promptId);
         if (index !== -1) {
-            savedPrompts[index] = updatedPrompt; // Replace with server data (includes updated_at)
-        } else {
-            // If not found locally (shouldn't happen usually), add it
-            console.warn(`Prompt ${promptId} updated but not found locally. Adding.`);
-            savedPrompts.unshift(updatedPrompt);
+            savedPrompts[index] = updatedPrompt;
         }
-        renderPromptLibrary(); // Refresh the UI
+        renderPromptLibrary();
 
-        return { success: true, message: 'Prompt updated successfully!', prompt: updatedPrompt };
+        return { 
+            success: true, 
+            message: 'Prompt updated successfully!', 
+            prompt: updatedPrompt 
+        };
 
     } catch (error) {
-        console.error("Error updating prompt on server:", error);
-        alert("Failed to update prompt on the server. Please try again later.");
+        console.error("Error updating prompt:", error);
+        
+        if (error.message === 'Authentication required') {
+            return { success: false, message: 'Please log in again.' };
+        }
+        
         return { success: false, message: 'Failed to update prompt.' };
     }
 }
@@ -587,6 +558,55 @@ function showEditPromptModal(prompt) {
         }, 100); // Adjust delay if needed, or find a better trigger
     } else {
         _populateAndSetupEditForm(prompt);
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    const bgColor = type === 'error' ? 'bg-red-500' : 
+                   type === 'warning' ? 'bg-yellow-500' : 
+                   type === 'success' ? 'bg-green-500' : 'bg-blue-500';
+    
+    notification.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded-lg z-50 transform transition-transform duration-300 translate-x-full`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    requestAnimationFrame(() => {
+        notification.classList.remove('translate-x-full');
+    });
+    
+    // Auto remove
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+
+function initializeAuth() {
+    try {
+        const storedToken = localStorage.getItem('userToken');
+        const storedExpiry = localStorage.getItem('tokenExpiry');
+        
+        if (storedToken && storedExpiry) {
+            currentUserToken = storedToken;
+            tokenExpiry = parseInt(storedExpiry);
+            
+            if (!isTokenValid()) {
+                // Clean up expired tokens
+                localStorage.removeItem('userToken');
+                localStorage.removeItem('tokenExpiry');
+                currentUserToken = null;
+                tokenExpiry = null;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to initialize auth from storage:', error);
     }
 }
 
@@ -1529,21 +1549,95 @@ function parseJwt(token) {
 
 function handleCredentialResponse(response) {
     hideError();
-    const responsePayload = parseJwt(response.credential);
-    if (responsePayload) {
-        currentUserToken = response.credential; // Store the raw token string
-        console.log("User logged in. Token stored for API calls.");
-        const userData = {
-            name: responsePayload.name,
-            picture: responsePayload.picture,
-            email: responsePayload.email
-        };
-        storeUserData(userData);
-        showRouterScreen(userData);
-        checkForNewPatchNotes(); // Check after login
-        loadPromptsFromServer();
-    } else {
-        showError("Failed to process login credentials.");
+    
+    try {
+        const responsePayload = parseJwt(response.credential);
+        if (!responsePayload) {
+            throw new Error('Invalid token format');
+        }
+
+        // Exchange Google token for your backend token
+        exchangeTokenWithBackend(response.credential)
+            .then(backendToken => {
+                currentUserToken = backendToken.access_token;
+                tokenExpiry = Date.now() + (backendToken.expires_in * 1000);
+                
+                // Store tokens securely
+                localStorage.setItem('userToken', currentUserToken);
+                localStorage.setItem('tokenExpiry', tokenExpiry.toString());
+                
+                const userData = {
+                    name: responsePayload.name,
+                    picture: responsePayload.picture,
+                    email: responsePayload.email
+                };
+                
+                storeUserData(userData);
+                showRouterScreen(userData);
+                checkForNewPatchNotes();
+                loadPromptsFromServer();
+            })
+            .catch(error => {
+                console.error('Token exchange failed:', error);
+                showError('Authentication failed. Please try again.');
+            });
+            
+    } catch (error) {
+        console.error('Credential processing failed:', error);
+        showError('Failed to process login credentials.');
+    }
+}
+
+async function apiRequest(endpoint, options = {}) {
+    const url = `${API_CONFIG.baseUrl}${endpoint}`;
+    const maxRetries = 3;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    ...getAuthHeaders(),
+                    ...options.headers
+                }
+            });
+
+            if (response.ok) {
+                // Handle empty responses (like DELETE)
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return await response.json();
+                }
+                return null;
+            }
+
+            if (response.status === 401) {
+                handleTokenExpiry();
+                throw new Error('Authentication required');
+            }
+
+            if (response.status >= 500 && attempt < maxRetries - 1) {
+                // Retry on server errors
+                attempt++;
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                continue;
+            }
+
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+
+        } catch (error) {
+            if (error.message === 'Authentication required') {
+                throw error;
+            }
+
+            if (attempt === maxRetries - 1) {
+                throw error;
+            }
+
+            attempt++;
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
     }
 }
 
