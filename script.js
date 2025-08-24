@@ -5,8 +5,6 @@ let isPatchNotesPanelOpen = false;
 let lastSeenPatchNoteId = parseInt(localStorage.getItem('lastSeenPatchNoteId')) || 0;
 let savedPrompts = [];
 const PROMPT_STORAGE_KEY = 'llmRouterPrompts';
-let currentUserToken = null;
-let tokenExpiry = null;
 
 const bubbleGradients = {
     'green': 'linear-gradient(135deg, #10b981 0%, #059669 100%)', // Emerald 500 -> 600
@@ -32,11 +30,6 @@ function toggleDarkMode() {
     isDarkMode = !isDarkMode;
     localStorage.setItem('darkMode', isDarkMode.toString());
     document.documentElement.classList.toggle('dark', isDarkMode);
-}
-
-function isTokenValid() {
-    if (!currentUserToken || !tokenExpiry) return false;
-    return Date.now() < tokenExpiry;
 }
 
 function generateSimpleUUID() {
@@ -216,7 +209,7 @@ function loadSavedPrompts() {
 // --- Revised renderPromptLibrary function with null checks ---
 function renderPromptLibrary() {
     console.log("--- renderPromptLibraryFixed called ---");
-    
+
     const container = document.getElementById('prompt-list-content');
     if (!container) {
         console.error("Container not found");
@@ -227,7 +220,7 @@ function renderPromptLibrary() {
     let noPromptsMessage = document.getElementById('no-prompts-message');
     if (!noPromptsMessage) {
         console.log("no-prompts-message element missing, recreating it");
-        
+
         const modalContent = container.parentElement;
         if (modalContent) {
             noPromptsMessage = document.createElement('div');
@@ -298,8 +291,7 @@ function renderPromptLibrary() {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             const promptId = e.currentTarget.dataset.promptId;
-            //deletePrompt(promptId);
-            deletePromptFromServer(promptId); // NEW
+            deletePrompt(promptId);
         });
     });
 
@@ -308,7 +300,7 @@ function renderPromptLibrary() {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             const promptId = e.currentTarget.dataset.promptId;
-            editPromptfromServer(promptId);
+            editPrompt(promptId);
         });
     });
 
@@ -335,347 +327,131 @@ function editPrompt(promptId) {
     showEditPromptModal(prompt);
 }
 
-function handleTokenExpiry() {
-    currentUserToken = null;
-    tokenExpiry = null;
-    localStorage.removeItem('userToken');
-    localStorage.removeItem('tokenExpiry');
-    
-    // Show re-authentication UI
-    showAuthenticationRequired();
-}
-
-// Helper function to get headers with Authorization
-function getAuthHeaders() {
-    if (!isTokenValid()) {
-        console.warn("Token is invalid or expired");
-        // Optionally trigger re-authentication
-        handleTokenExpiry();
-        throw new Error('Authentication required');
-    }
-    
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentUserToken}`
-    };
-}
-
-function showAuthenticationRequired() {
-    const message = document.createElement('div');
-    message.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-lg z-50';
-    message.innerHTML = `
-        <div class="flex items-center">
-            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-            </svg>
-            Session expired. Please <button onclick="triggerReauth()" class="underline font-semibold">log in again</button>
-        </div>
-    `;
-    document.body.appendChild(message);
-    
-    setTimeout(() => {
-        if (document.body.contains(message)) {
-            document.body.removeChild(message);
-        }
-    }, 10000);
-}
-
-// Load prompts from the backend server
-async function loadPromptsFromServer() {
-    if (!isTokenValid()) {
-        console.log("Not authenticated, cannot load prompts");
-        savedPrompts = [];
-        renderPromptLibrary();
-        return;
-    }
-
-    try {
-        console.log("Loading prompts from server...");
-        const promptsData = await apiRequest(API_CONFIG.endpoints.prompts);
-        
-        if (Array.isArray(promptsData)) {
-            savedPrompts = promptsData;
-            renderPromptLibrary();
-            console.log(`Loaded ${promptsData.length} prompts from server`);
-        } else {
-            throw new Error('Invalid response format');
-        }
-
-    } catch (error) {
-        console.error("Error loading prompts:", error);
-        
-        if (error.message === 'Authentication required') {
-            // Don't show error alert for auth issues, handled by handleTokenExpiry
-            return;
-        }
-        
-        // Show user-friendly error
-        showNotification('Failed to load prompts. Using offline mode.', 'warning');
-        
-        // Fallback to local storage if available
-        loadSavedPrompts();
-    }
-}
-
-// Add a new prompt to the backend server
-async function addPromptToServer(title, content, tag = '') {
-    if (!isTokenValid()) {
-        showNotification('You need to be logged in to save prompts.', 'error');
-        return { success: false, message: 'Authentication required.' };
-    }
-
-    if (!title.trim() || !content.trim()) {
-        showNotification('Title and content are required.', 'error');
-        return { success: false, message: 'Title and content are required.' };
-    }
-
-    try {
-        const promptData = {
-            title: title.trim(),
-            content: content.trim(),
-            tag: tag.trim()
-        };
-
-        console.log("Saving prompt to server:", promptData);
-        const newPrompt = await apiRequest(API_CONFIG.endpoints.prompts, {
-            method: 'POST',
-            body: JSON.stringify(promptData)
-        });
-
-        // Add to local array
-        savedPrompts.unshift(newPrompt);
-        renderPromptLibrary();
-        
-        return { 
-            success: true, 
-            message: 'Prompt saved successfully!', 
-            prompt: newPrompt 
-        };
-
-    } catch (error) {
-        console.error("Error saving prompt:", error);
-        
-        if (error.message === 'Authentication required') {
-            return { success: false, message: 'Please log in again.' };
-        }
-        
-        showNotification('Failed to save prompt. Please try again.', 'error');
-        return { success: false, message: 'Failed to save prompt.' };
-    }
-}
-
-// Delete a prompt from the backend server
-async function deletePromptFromServer(promptId) {
-    if (!isTokenValid()) {
-        showNotification('You need to be logged in to delete prompts.', 'error');
-        return;
-    }
-
-    if (!confirm('Are you sure you want to delete this prompt?')) {
-        return;
-    }
-
-    try {
-        console.log(`Deleting prompt ${promptId}...`);
-        await apiRequest(`${API_CONFIG.endpoints.prompts}/${promptId}`, {
-            method: 'DELETE'
-        });
-
-        // Remove from local array
-        savedPrompts = savedPrompts.filter(prompt => prompt.id !== promptId);
-        renderPromptLibrary();
-        
-        showNotification('Prompt deleted successfully!', 'success');
-
-    } catch (error) {
-        console.error("Error deleting prompt:", error);
-        
-        if (error.message === 'Authentication required') {
-            return;
-        }
-        
-        showNotification('Failed to delete prompt. Please try again.', 'error');
-    }
-}
-
-// --- NEW: API Function to Update a Prompt on the Server ---
-async function updatePromptOnServer(promptId, updateData) {
-    if (!isTokenValid()) {
-        return { success: false, message: 'Authentication required.' };
-    }
-
-    if (!updateData.title?.trim() || !updateData.content?.trim()) {
-        return { success: false, message: 'Title and content are required.' };
-    }
-
-    try {
-        console.log(`Updating prompt ${promptId}...`);
-        const updatedPrompt = await apiRequest(`${API_CONFIG.endpoints.prompts}/${promptId}`, {
-            method: 'PUT',
-            body: JSON.stringify(updateData)
-        });
-
-        // Update in local array
-        const index = savedPrompts.findIndex(p => p.id === promptId);
-        if (index !== -1) {
-            savedPrompts[index] = updatedPrompt;
-        }
-        renderPromptLibrary();
-
-        return { 
-            success: true, 
-            message: 'Prompt updated successfully!', 
-            prompt: updatedPrompt 
-        };
-
-    } catch (error) {
-        console.error("Error updating prompt:", error);
-        
-        if (error.message === 'Authentication required') {
-            return { success: false, message: 'Please log in again.' };
-        }
-        
-        return { success: false, message: 'Failed to update prompt.' };
-    }
-}
-// --- END NEW: updatePromptOnServer ---
-
 // Edit prompt modal
 function showEditPromptModal(prompt) {
-    if (!prompt) {
-        console.error("Cannot show edit modal, prompt is null/undefined.");
-        return;
-    }
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]'; // Higher than delete modal
 
-    // Ensure the main prompt library modal is open
-    if (!isPromptLibraryOpen) {
-        console.log("Prompt library not open, opening it first...");
-        togglePromptLibrary(); // This will open it and render
-        // We need to wait a bit for the modal and its elements to be added to the DOM
-        // A simple setTimeout can work, or we could use a more robust method like waiting for an event.
-        setTimeout(() => {
-            _populateAndSetupEditForm(prompt);
-        }, 100); // Adjust delay if needed, or find a better trigger
-    } else {
-        _populateAndSetupEditForm(prompt);
-    }
-}
-
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    const bgColor = type === 'error' ? 'bg-red-500' : 
-                   type === 'warning' ? 'bg-yellow-500' : 
-                   type === 'success' ? 'bg-green-500' : 'bg-blue-500';
-    
-    notification.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded-lg z-50 transform transition-transform duration-300 translate-x-full`;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    // Animate in
-    requestAnimationFrame(() => {
-        notification.classList.remove('translate-x-full');
-    });
-    
-    // Auto remove
-    setTimeout(() => {
-        notification.classList.add('translate-x-full');
-        setTimeout(() => {
-            if (document.body.contains(notification)) {
-                document.body.removeChild(notification);
-            }
-        }, 300);
-    }, 5000);
-}
-
-function initializeAuth() {
-    try {
-        const storedToken = localStorage.getItem('userToken');
-        const storedExpiry = localStorage.getItem('tokenExpiry');
-        
-        if (storedToken && storedExpiry) {
-            currentUserToken = storedToken;
-            tokenExpiry = parseInt(storedExpiry);
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">Edit Prompt</h3>
+                <button id="close-edit-modal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
             
-            if (!isTokenValid()) {
-                // Clean up expired tokens
-                localStorage.removeItem('userToken');
-                localStorage.removeItem('tokenExpiry');
-                currentUserToken = null;
-                tokenExpiry = null;
-            }
+            <form id="edit-prompt-form" class="space-y-4">
+                <div>
+                    <label for="edit-prompt-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                    <input type="text" id="edit-prompt-title" value="${prompt.title}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
+                </div>
+                
+                <div>
+                    <label for="edit-prompt-content" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content</label>
+                    <textarea id="edit-prompt-content" rows="8" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-vertical" required>${prompt.content}</textarea>
+                </div>
+                
+                <div>
+                    <label for="edit-prompt-tag" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tag (Optional)</label>
+                    <input type="text" id="edit-prompt-tag" value="${prompt.tag || ''}" list="model-tags" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="e.g., Claude, GPT-4, Writing">
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600">
+                    <button type="button" id="cancel-edit" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" id="save-edit" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition duration-200">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    // Get form elements
+    const form = modal.querySelector('#edit-prompt-form');
+    const titleInput = modal.querySelector('#edit-prompt-title');
+    const contentInput = modal.querySelector('#edit-prompt-content');
+    const tagInput = modal.querySelector('#edit-prompt-tag');
+    const saveButton = modal.querySelector('#save-edit');
+    const cancelButton = modal.querySelector('#cancel-edit');
+    const closeButton = modal.querySelector('#close-edit-modal');
+
+    // Close modal function
+    const closeModal = () => {
+        if (document.body.contains(modal)) {
+            document.body.removeChild(modal);
         }
-    } catch (error) {
-        console.error('Failed to initialize auth from storage:', error);
-    }
-}
+    };
 
-// Helper function to handle the actual population and setup
-// This avoids duplicating code and handles the async nature of opening the modal
-function _populateAndSetupEditForm(prompt) {
-    console.log("Populating edit form for prompt ID:", prompt.id);
+    // Event listeners
+    closeButton.addEventListener('click', closeModal);
+    cancelButton.addEventListener('click', closeModal);
 
-    // Get the shared save/edit prompt section
-    const savePromptSection = document.getElementById('save-prompt-section');
-    if (!savePromptSection) {
-        console.error("Save/Edit prompt section (#save-prompt-section) not found.");
-        return;
-    }
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
 
-    // Get the input fields within the section
-    const titleInput = document.getElementById('prompt-title-input');
-    const contentInput = document.getElementById('prompt-content-input');
-    const tagInput = document.getElementById('prompt-tag-input');
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
 
-    if (!titleInput || !contentInput || !tagInput) {
-        console.error("One or more input fields for the prompt form not found.");
-        return;
-    }
+    // Handle form submission
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
 
-    // Populate the form fields with the existing prompt data
-    titleInput.value = prompt.title || '';
-    contentInput.value = prompt.content || '';
-    tagInput.value = prompt.tag || '';
+        const newTitle = titleInput.value.trim();
+        const newContent = contentInput.value.trim();
+        const newTag = tagInput.value.trim();
 
-    // Show the form section if it's hidden
-    savePromptSection.classList.remove('hidden');
+        if (!newTitle || !newContent) {
+            alert('Title and content are required.');
+            return;
+        }
 
-    // --- Crucially: Change the UI to reflect editing mode ---
-    const saveButton = document.getElementById('confirm-save-prompt');
-    if (saveButton) {
-        // Store the original button HTML (if not already stored)
-        // A more robust way is to manage state explicitly or always reset from a known template
-        // For now, we'll change the text/icon directly
+        // Show saving state
+        saveButton.disabled = true;
+        saveButton.innerHTML = 'Saving...';
 
-        // Change button text and icon to "Update Prompt"
-        saveButton.innerHTML = `
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-            Update Prompt
-        `;
+        // Update the prompt
+        const promptIndex = savedPrompts.findIndex(p => p.id === prompt.id);
+        if (promptIndex !== -1) {
+            savedPrompts[promptIndex] = {
+                ...savedPrompts[promptIndex],
+                title: newTitle,
+                content: newContent,
+                tag: newTag,
+                updatedAt: new Date().toISOString()
+            };
 
-        // Use the data attribute on the form section to indicate we are editing
-        // and store the ID of the prompt being edited
-        savePromptSection.setAttribute('data-editing-prompt-id', prompt.id);
+            savePrompts();
 
-        console.log(`Edit mode activated for prompt ID: ${prompt.id}`);
-    } else {
-        console.error("Confirm save button not found.");
-    }
+            // Close modal and refresh the list
+            closeModal();
 
-    // Optional: Scroll the modal to the form section
-    const modalContent = document.getElementById('prompt-library-modal')?.querySelector('.flex-col'); // Adjust selector if needed in your HTML
-    if (modalContent) {
-        // Give it a moment for the DOM to settle after removing 'hidden'
-        requestAnimationFrame(() => {
-             modalContent.scrollTop = modalContent.scrollHeight;
-        });
-    }
+            setTimeout(() => {
+                renderPromptLibrary();
+            }, 100);
 
-    // Optional: Focus the title input for immediate editing
+            console.log('Prompt updated:', savedPrompts[promptIndex]);
+        }
+    });
+
+    // Add to DOM and focus title input
+    document.body.appendChild(modal);
     titleInput.focus();
-    titleInput.select();
+    titleInput.select(); // Select all text for easy editing
 }
 
 // Save prompts to localStorage
@@ -701,112 +477,54 @@ function confirmSavePrompt() {
     const tag = tagInput.value;
 
     const saveButton = document.getElementById('confirm-save-prompt');
-    const savePromptSection = document.getElementById('save-prompt-section');
-    const originalButtonHTML = saveButton.innerHTML; // Capture original HTML *before* changing it
+    const originalButtonHTML = saveButton.innerHTML;
 
-    // --- Check if we are editing an existing prompt ---
-    const editingPromptId = savePromptSection?.getAttribute('data-editing-prompt-id');
-    const isEditing = Boolean(editingPromptId && editingPromptId !== 'null');
-
-    // Basic validation
-    if (!title.trim() || !content.trim()) {
-        alert('Title and content are required.');
-        return;
-    }
-
-    // --- Update UI to show saving state ---
     saveButton.disabled = true;
-    // Determine button text based on action
-    const actionText = isEditing ? "Updating..." : "Saving...";
     saveButton.innerHTML = `
         <svg class="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        ${actionText}
+        Saving...
     `;
 
-    // --- Decide which API function to call ---
-    let savePromise;
-    if (isEditing) {
-        console.log(`Calling updatePromptOnServer for ID: ${editingPromptId}`);
-        savePromise = updatePromptOnServer(editingPromptId, { title, content, tag }); // We'll define this new function
-    } else {
-        console.log("Calling addPromptToServer for new prompt");
-        savePromise = addPromptToServer(title, content, tag); // Your existing function
-    }
+    const result = addPrompt(title, content, tag);
 
-    // --- Handle the result of the save/update operation ---
-    savePromise.then(result => {
-        if (result.success) {
-            // --- Success ---
-            // Clear inputs
-            titleInput.value = '';
-            contentInput.value = '';
-            tagInput.value = '';
+    if (result.success) {
+        // Clear form inputs
+        titleInput.value = '';
+        contentInput.value = '';
+        tagInput.value = '';
 
-            // Show success message on button
-            const successText = isEditing ? "Updated!" : "Saved!";
-            saveButton.innerHTML = `
-                <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                ${successText}
-            `;
+        // Show success state
+        saveButton.innerHTML = `
+            <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Saved!
+        `;
 
-            // Reset UI and state after delay
-            setTimeout(() => {
-                // Hide the save/edit form section
-                savePromptSection.classList.add('hidden');
-                // Clear editing state
-                savePromptSection.removeAttribute('data-editing-prompt-id');
-                // Restore original button state
-                saveButton.disabled = false;
-                saveButton.innerHTML = originalButtonHTML; // Restore original text/icon
+        // Use the fixed render function that handles missing no-prompts-message
+        setTimeout(() => {
+            renderPromptLibrary();
+        }, 100);
 
-                // Optional: Scroll list to top to show new/updated item
-                const listContainer = document.getElementById('prompt-list-container');
-                if (listContainer && !isEditing) { // Only scroll for new items if desired
-                    listContainer.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            }, 1500);
-
-        } else {
-            // --- Failure ---
-            console.error("Prompt save/update failed:", result.message);
-            alert(result.message || `Failed to ${isEditing ? 'update' : 'save'} prompt.`);
-            // Restore button state
+        // Schedule UI cleanup
+        setTimeout(() => {
+            document.getElementById('save-prompt-section').classList.add('hidden');
             saveButton.disabled = false;
-            // Restore original button text/icon based on mode
-            if (isEditing) {
-                 saveButton.innerHTML = `
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Update Prompt
-                `;
-            } else {
-                saveButton.innerHTML = originalButtonHTML; // Restore original "Save Prompt" text
-            }
-        }
-    }).catch(error => {
-        // --- Unexpected Error ---
-        console.error("Unexpected error in confirmSavePrompt:", error);
-        alert("An unexpected error occurred. Please try again.");
-        saveButton.disabled = false;
-        // Restore original button text/icon based on mode
-        if (isEditing) {
-             saveButton.innerHTML = `
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                Update Prompt
-            `;
-        } else {
             saveButton.innerHTML = originalButtonHTML;
-        }
-        // Clear editing state on error too
-        savePromptSection.removeAttribute('data-editing-prompt-id');
-    });
+
+            const listContainer = document.getElementById('prompt-list-container');
+            if (listContainer) {
+                listContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }, 200);
+
+    } else {
+        alert(result.message || 'Failed to save prompt.');
+        saveButton.disabled = false;
+        saveButton.innerHTML = originalButtonHTML;
+    }
 }
 // --- End Revised confirmSavePrompt ---
 
@@ -864,7 +582,7 @@ function showCustomConfirmDialog({ title, message, confirmText = 'Confirm', canc
     // Create modal backdrop
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]'; // Higher z-index than prompt library
-    
+
     // Create modal content
     modal.innerHTML = `
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
@@ -1023,7 +741,7 @@ function cancelSavePrompt() {
 function togglePatchNotesPanel() {
     const panel = document.getElementById('patch-notes-panel');
     const toggleButton = document.getElementById('patch-notes-toggle');
-    
+
     isPatchNotesPanelOpen = !isPatchNotesPanelOpen;
     if (isPatchNotesPanelOpen) {
         // Position panel relative to the toggle button
@@ -1031,7 +749,7 @@ function togglePatchNotesPanel() {
         panel.style.position = 'fixed';
         panel.style.left = `${buttonRect.right - panel.offsetWidth + 20}px`;
         panel.style.top = `${buttonRect.bottom + window.scrollY}px`;
-        
+
         // Check if panel goes off screen and adjust if needed
         const panelRect = panel.getBoundingClientRect();
         if (panelRect.right > window.innerWidth) {
@@ -1040,9 +758,9 @@ function togglePatchNotesPanel() {
         if (panelRect.bottom > window.innerHeight) {
             panel.style.top = `${buttonRect.top - panelRect.height + window.scrollY}px`;
         }
-        
+
         panel.classList.remove('hidden');
-        
+
         // Mark all notes as seen
         if (patchNotes.length > 0) {
             const latestNoteId = Math.max(...patchNotes.map(note => note.id));
@@ -1176,7 +894,7 @@ function createModelCard(model, index) {
 function drawNetworkLines() {
     const svgContainer = document.getElementById('network-lines');
     const svg = svgContainer?.querySelector('svg');
-    
+
     if (!svgContainer || !svg) {
         console.warn("Network lines SVG container or SVG not found.");
         return;
@@ -1196,7 +914,7 @@ function drawNetworkLines() {
 
     // Get all model bubbles
     const modelBubbles = document.querySelectorAll('.model-bubble');
-    
+
     if (modelBubbles.length < 2) {
         console.log("Not enough bubbles to draw lines.");
         return;
@@ -1216,7 +934,7 @@ function drawNetworkLines() {
     // --- Connect nodes based on grid adjacency ---
     // We need to figure out the grid structure.
     // A simple way: connect nodes that are close horizontally or vertically.
-    
+
     // 1. Sort nodes by Y then X to guess row/column order (helps if CSS grid is regular)
     nodes.sort((a, b) => {
         if (Math.abs(a.cy - b.cy) < 30) { // If Y coords are close (within 30px), sort by X
@@ -1230,7 +948,7 @@ function drawNetworkLines() {
     const uniqueXs = [...new Set(nodes.map(n => Math.round(n.cx)))].sort((a, b) => a - b);
     const numRows = uniqueYs.length;
     const numCols = uniqueXs.length;
-    
+
     console.log(`Estimated Grid: ${numRows} rows, ${numCols} cols`);
 
     // 3. Connect adjacent nodes (simplistic grid connection)
@@ -1239,37 +957,37 @@ function drawNetworkLines() {
         for (let j = i + 1; j < nodes.length; j++) {
             const nodeA = nodes[i];
             const nodeB = nodes[j];
-            
+
             const dx = Math.abs(nodeA.cx - nodeB.cx);
             const dy = Math.abs(nodeA.cy - nodeB.cy);
 
             // Connect if:
             // 1. They are on the same row (Y close) and adjacent columns (X gap is reasonable)
             // 2. They are in the same column (X close) and adjacent rows (Y gap is reasonable)
-            
+
             // Estimate average horizontal/vertical spacing
             const avgHSpacing = numCols > 1 ? (Math.max(...uniqueXs) - Math.min(...uniqueXs)) / (numCols - 1) : 100;
             const avgVSpacing = numRows > 1 ? (Math.max(...uniqueYs) - Math.min(...uniqueYs)) / (numRows - 1) : 100;
-            
+
             const hThreshold = avgHSpacing * 1.2; // Allow for some variation
             const vThreshold = avgVSpacing * 1.2;
 
             if ((Math.abs(dy) < 20 && dx < hThreshold && dx > 10) || // Horizontal neighbor
                 (Math.abs(dx) < 20 && dy < vThreshold && dy > 10)) {  // Vertical neighbor
-                 
+
                 console.log(`Connecting node ${i} (${nodeA.id}) to node ${j} (${nodeB.id})`);
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', nodeA.cx);
                 line.setAttribute('y1', nodeA.cy);
                 line.setAttribute('x2', nodeB.cx);
                 line.setAttribute('y2', nodeB.cy);
-                
+
                 // --- Style lines ---
                 line.setAttribute('stroke', '#ffffff');
                 line.setAttribute('stroke-width', '1');
                 line.setAttribute('stroke-opacity', '0.3'); // Subtle
                 // line.setAttribute('stroke-dasharray', '2,4'); // Optional: dashed
-                
+
                 svg.appendChild(line);
             }
         }
@@ -1549,95 +1267,19 @@ function parseJwt(token) {
 
 function handleCredentialResponse(response) {
     hideError();
-    
-    try {
-        const responsePayload = parseJwt(response.credential);
-        if (!responsePayload) {
-            throw new Error('Invalid token format');
-        }
-
-        // Exchange Google token for your backend token
-        exchangeTokenWithBackend(response.credential)
-            .then(backendToken => {
-                currentUserToken = backendToken.access_token;
-                tokenExpiry = Date.now() + (backendToken.expires_in * 1000);
-                
-                // Store tokens securely
-                localStorage.setItem('userToken', currentUserToken);
-                localStorage.setItem('tokenExpiry', tokenExpiry.toString());
-                
-                const userData = {
-                    name: responsePayload.name,
-                    picture: responsePayload.picture,
-                    email: responsePayload.email
-                };
-                
-                storeUserData(userData);
-                showRouterScreen(userData);
-                checkForNewPatchNotes();
-                loadPromptsFromServer();
-            })
-            .catch(error => {
-                console.error('Token exchange failed:', error);
-                showError('Authentication failed. Please try again.');
-            });
-            
-    } catch (error) {
-        console.error('Credential processing failed:', error);
-        showError('Failed to process login credentials.');
-    }
-}
-
-async function apiRequest(endpoint, options = {}) {
-    const url = `${API_CONFIG.baseUrl}${endpoint}`;
-    const maxRetries = 3;
-    let attempt = 0;
-
-    while (attempt < maxRetries) {
-        try {
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    ...getAuthHeaders(),
-                    ...options.headers
-                }
-            });
-
-            if (response.ok) {
-                // Handle empty responses (like DELETE)
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    return await response.json();
-                }
-                return null;
-            }
-
-            if (response.status === 401) {
-                handleTokenExpiry();
-                throw new Error('Authentication required');
-            }
-
-            if (response.status >= 500 && attempt < maxRetries - 1) {
-                // Retry on server errors
-                attempt++;
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                continue;
-            }
-
-            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-
-        } catch (error) {
-            if (error.message === 'Authentication required') {
-                throw error;
-            }
-
-            if (attempt === maxRetries - 1) {
-                throw error;
-            }
-
-            attempt++;
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
+    const responsePayload = parseJwt(response.credential);
+    if (responsePayload) {
+        console.log("Google ID Token for backend testing:", response.credential);
+        const userData = {
+            name: responsePayload.name,
+            picture: responsePayload.picture,
+            email: responsePayload.email
+        };
+        storeUserData(userData);
+        showRouterScreen(userData);
+        checkForNewPatchNotes(); // Check after login
+    } else {
+        showError("Failed to process login credentials.");
     }
 }
 
@@ -1738,7 +1380,7 @@ function setupBubbleInteractions() {
             // Extract translate if it exists, or just append
             // This is complex; let's simplify by applying parallax to the wrapper instead.
             // However, the wrapper already has scattering. Let's apply parallax relative to its scattered position.
-            
+
             // Simpler: Just apply a small translate on top of existing absolute positioning
             // The bubble is absolutely positioned, so translate moves it relative to that position.
             // We need to get the wrapper's position to calculate correctly.
@@ -1769,7 +1411,7 @@ function setupBubbleInteractions() {
                      // We need to use a different approach or disable the CSS animation on mousemove.
                  }
             }
-            
+
         });
     });
 
@@ -1815,7 +1457,7 @@ function setupBubbleInteractions() {
                 pointerEvents: 'none',
                 zIndex: '3' // Above content
             });
-            
+
             bubble.appendChild(ripple);
 
             // Remove ripple element after animation
@@ -1824,7 +1466,7 @@ function setupBubbleInteractions() {
             });
         }
     });
-    
+
     // Ensure the ripple animation is defined in the document
     if (!document.querySelector('#ripple-animation-style')) {
         const style = document.createElement('style');
@@ -1850,7 +1492,7 @@ function setupBubbleInteractions() {
 // Initialize the app
 function initializeApp() {
     initializeDarkMode();
-    //loadSavedPrompts(); // --- NEW: Load prompts on startup ---
+    loadSavedPrompts(); // --- NEW: Load prompts on startup ---
     try {
         const userData = localStorage.getItem('user');
         if (userData) {
@@ -1861,12 +1503,12 @@ function initializeApp() {
         console.error('Failed to load user ', error);
         localStorage.removeItem('user');
     }
-    
+
     // --- Initialize Parallax Background ---
     createStarfield(); // Generate stars
     setupCursorGlowParallax(); // Setup cursor tracking
     // --- End Parallax Background Init ---
-    
+
     // Event listeners
     document.getElementById('signout-btn').addEventListener('click', handleSignOut);
     document.getElementById('demo-login').addEventListener('click', handleDemoLogin);
