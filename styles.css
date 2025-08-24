@@ -1,3 +1,53 @@
+/* --- 3-Layer Parallax Background Styles --- */
+
+/* Ensure the background container covers everything */
+#parallax-background {
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Starfield Layer */
+#starfield-layer {
+    /* Animation for subtle twinkling effect (optional) */
+    animation: twinkle 5s ease-in-out infinite alternate;
+}
+
+/* Optional: Twinkling animation for stars */
+
+@keyframes twinkle {
+    0% { opacity: 0.8; }
+    100% { opacity: 1; }
+}
+
+
+/* Grid Layer */
+#grid-layer > div {
+    /* Animation for slow drifting */
+    animation: drift 60s linear infinite;
+}
+
+@keyframes drift {
+    0% {
+        transform: translate(0, 0);
+    }
+    100% {
+        transform: translate(50px, 50px); /* Adjust distance for speed */
+    }
+}
+
+/* Cursor Glow Layer */
+#cursor-glow {
+    transition: transform 0.1s ease-out; /* Smooth movement */
+    /* Ensure it's visible on light and dark modes */
+    /* You might need to adjust the color based on your theme */
+    /* bg-blue-500/10 translates to rgba(59, 130, 246, 0.1) */
+    /* Consider using a more neutral color like white or a theme-aware color */
+    /* Example for dark mode friendliness (requires JS to toggle class): */
+    .dark #cursor-glow { background-color: rgba(255, 255, 255, 0.1); } 
+}
+
+/* --- End Parallax Background Styles --- */
+
 /* Animation for the bell icon on new notifications */
 .bell-animate {
     animation: ring 0.5s ease-in-out;
