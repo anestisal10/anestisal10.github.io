@@ -87,6 +87,17 @@ const models = [
         icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.54 0 3-.35 4.31-.99l-2.12-2.12c-.74.3-1.54.48-2.38.48-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6c0 .84-.18 1.64-.48 2.38l2.12 2.12C21.65 15 22 13.54 22 12c0-5.52-4.48-10-10-10z',
         strengths: ['Long Context Window', 'Document Processing', 'Memory Capabilities'],
         useCases: ['Document analysis', 'Long conversations', 'Research synthesis']
+    },
+    {
+        id: 'longcat',
+        name: 'LongCat',
+        company: 'Meituan',
+        url: 'https://longcat.chat/',
+        info_url: 'https://huggingface.co/meituan-longcat/LongCat-Flash-Chat',
+        color: 'yellow',
+        icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.54 0 3-.35 4.31-.99l-2.12-2.12c-.74.3-1.54.48-2.38.48-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6c0 .84-.18 1.64-.48 2.38l2.12 2.12C21.65 15 22 13.54 22 12c0-5.52-4.48-10-10-10z',
+        strengths: ['Long Context Window', 'Document Processing', 'Fast'],
+        useCases: ['Document analysis', 'Long conversations', 'Research synthesis']
     }
 ];
 // Sample Patch Notes Data (You can update this with real data)
@@ -134,3 +145,4 @@ const patchNotes = [
     // Add more notes as needed
 
 ];
+
